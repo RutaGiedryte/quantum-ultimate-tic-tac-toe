@@ -1,4 +1,8 @@
- 
+import math
+from qiskit import QuantumCircuit, transpile
+from qiskit_aer import AerSimulator
+
+
 def print_board(board):
     print("\n")
     print(f"  {board[0]} | {board[1]} | {board[2]}")
@@ -104,6 +108,24 @@ def get_valid_quantum_position(board, current_player, other_player):
     return place_1, place_2
 
 
+def quantum_possible(board, players):
+    # Make sure players[0] is the current player
+    # A spot is full if:
+    #   - Own quantum mark
+    #   - Both quantum mark /2 ways
+    #   - Any classic mark /2 ways
+    possible_moves = 0
+    for i in board:
+        if (i != players[0].get('quantum') + " "
+                and i != players[0].get('quantum') + players[1].get('quantum')
+                and i != players[1].get('quantum') + players[0].get('quantum')
+                and i != players[0].get('classic') + " "
+                and i != players[1].get('classic') + " "):
+            possible_moves += 1
+
+    return True if possible_moves >= 2 else False
+
+
 def quantum_move(board, current_player, other_player, move_list, player_list):
     print("You chose a QUANTUM move.")
     position = get_valid_quantum_position(board, current_player, other_player)
@@ -118,12 +140,14 @@ def quantum_move(board, current_player, other_player, move_list, player_list):
 
     player_list.append(current_player)
     move_list.append((position[0], position[1]))
+    return True
 
 
 def classic_move(board, current_player):
     print("You chose a CLASSIC move.")
     position = get_valid_position(board)
     board[position] = current_player.get('classic') + " "
+    return True
 
 
 def check_end_game(board, current_player):
@@ -136,3 +160,57 @@ def check_end_game(board, current_player):
         print("It's a draw!")
         return True
     return False
+
+
+def collapse(board, move_list, player_list, quantum=False, service=None):
+    print_board(board)
+    amplitudes = combine_and_normalize(move_list)
+
+    # 1) Verify 'vec' has length 2^n for some integer n
+    length = len(amplitudes)
+    n_qubits = int(math.log2(length))
+    if 2 ** n_qubits != length:
+        raise ValueError("State vector length must be a power of 2.")
+
+    # 2) Create the circuit with n qubits and n classical bits
+    qc = QuantumCircuit(n_qubits, n_qubits)
+
+    # 3) Initialize the qubits to the custom state vector
+    qc.initialize(amplitudes, range(n_qubits))
+
+    # 4) Measure all qubits into all classical bits
+    qc.measure(range(n_qubits), range(n_qubits))
+
+    # 5) Transpile and run
+    if quantum:
+        backend = service.least_busy(simulator=False, operational=True)
+    else:
+        backend = AerSimulator()
+
+    transpiled_qc = transpile(qc, backend)
+    job = backend.run(transpiled_qc, shots=1)
+    result = job.result()
+    counts = result.get_counts()
+
+    bitstring = list(counts.keys())[0]
+    for i in range(len(move_list)):
+        place_1 = move_list[i][int(bitstring[i])]
+        board[place_1 - 1] = player_list[i].get('classic') + " "
+
+    for i in range(9):
+        if board[i] != "X " and board[i] != "O ":
+            board[i] = "  "
+
+    move_list.clear()
+    player_list.clear()
+
+
+def ask_move(move_types):
+    # Ask the user which type of move they'd like to make
+    move_type = ""
+    while move_type not in move_types:
+        move_type = input("Which type of move? (quantum/classic): ").strip().lower()
+        if move_type not in move_types:
+            print("Invalid choice. Please choose 'quantum (q)' or 'classic (c)'.")
+
+    return move_type
