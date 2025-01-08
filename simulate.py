@@ -133,17 +133,15 @@ def get_valid_quantum_position(board, current_player, other_player):
             place_2 = int(input("Enter the second position (1-9): "))
             if place_1 < 1 or place_1 > 9 or place_2 < 1 or place_2 > 9 or place_1 == place_2:
                 raise ValueError
-            if (board[place_1 - 1] == current_player.get('classic')
-                    or board[place_1 - 1] == other_player.get('classic')):
-                print(f'Position {place_1} is already taken. Try again.')
-            elif (board[place_2 - 1] == current_player.get('classic')
-                    or board[place_2 - 1] == other_player.get('classic')):
-                print(f'Position {place_2} is already taken. Try again.')
-            elif (board[place_1 - 1] == current_player.get('quantum')
-                    or board[place_2 - 1] == current_player.get('quantum')):
-                print("A quantum position is already taken by you. Try again.")
-            else:
-                return place_1, place_2
+            for i in [place_1 - 1, place_2 - 1]:
+                if (board[i] == current_player.get('classic') + " "
+                        or board[i] == other_player.get('classic') + " "
+                        or board[i] == current_player.get('quantum') + other_player.get('quantum')
+                        or board[i] == other_player.get('quantum') + current_player.get('quantum')
+                        or board[i] == current_player.get('quantum') + ' '):
+                    print(f'Position {i + 1} is already taken. Try again.')
+                else:
+                    return place_1, place_2
         except ValueError:
             print("Invalid input. Please enter a number between 1 and 9.")
 
