@@ -1,4 +1,8 @@
- 
+import math
+from qiskit import QuantumCircuit, transpile
+from qiskit_aer import AerSimulator
+
+
 def print_board(board):
     print("\n")
     print(f"  {board[0]} | {board[1]} | {board[2]}")
@@ -136,3 +140,46 @@ def check_end_game(board, current_player):
         print("It's a draw!")
         return True
     return False
+
+
+def collapse(board, move_list, player_list, quantum=False, service=None):
+    print_board(board)
+    amplitudes = combine_and_normalize(move_list)
+
+    # 1) Verify 'vec' has length 2^n for some integer n
+    length = len(amplitudes)
+    n_qubits = int(math.log2(length))
+    if 2 ** n_qubits != length:
+        raise ValueError("State vector length must be a power of 2.")
+
+    # 2) Create the circuit with n qubits and n classical bits
+    qc = QuantumCircuit(n_qubits, n_qubits)
+
+    # 3) Initialize the qubits to the custom state vector
+    qc.initialize(amplitudes, range(n_qubits))
+
+    # 4) Measure all qubits into all classical bits
+    qc.measure(range(n_qubits), range(n_qubits))
+
+    # 5) Transpile and run
+    if quantum:
+        backend = service.least_busy(simulator=False, operational=True)
+    else:
+        backend = AerSimulator()
+
+    transpiled_qc = transpile(qc, backend)
+    job = backend.run(transpiled_qc, shots=1)
+    result = job.result()
+    counts = result.get_counts()
+
+    bitstring = list(counts.keys())[0]
+    for i in range(len(move_list)):
+        place_1 = move_list[i][int(bitstring[i])]
+        board[place_1 - 1] = player_list[i].get('classic') + " "
+
+    for i in range(9):
+        if board[i] != "X " and board[i] != "O ":
+            board[i] = "  "
+
+    move_list.clear()
+    player_list.clear()
