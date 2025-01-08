@@ -127,8 +127,10 @@ def get_valid_position(board):
 
 
 def get_valid_quantum_position(board, current_player, other_player):
-    while True:
+    found = place_1 = place_2 = False
+    while not found:
         try:
+            found = True
             place_1 = int(input("Enter the first position (1-9): "))
             place_2 = int(input("Enter the second position (1-9): "))
             if place_1 < 1 or place_1 > 9 or place_2 < 1 or place_2 > 9 or place_1 == place_2:
@@ -140,10 +142,10 @@ def get_valid_quantum_position(board, current_player, other_player):
                         or board[i] == other_player.get('quantum') + current_player.get('quantum')
                         or board[i] == current_player.get('quantum') + ' '):
                     print(f'Position {i + 1} is already taken. Try again.')
-                else:
-                    return place_1, place_2
+                    found = False
         except ValueError:
             print("Invalid input. Please enter a number between 1 and 9.")
+    return place_1, place_2
 
 
 def quantum_move(board, current_player, other_player, move_list, player_list):
