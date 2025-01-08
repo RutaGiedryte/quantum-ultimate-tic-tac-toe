@@ -12,22 +12,23 @@ def play_game(simulate=True, service=None):
     move_list = []
 
     current_player = player_x
+    other_player = player_o
     while True:
         print_board(board)
         print(f"Player {current_player.get('classic')}'s turn.")
 
-        # Ask the user which type of move they'd like to make
-        move_type = ""
-        while move_type not in move_types:
-            move_type = input("Which type of move? (quantum/classic): ").strip().lower()
-            if move_type not in move_types:
-                print("Invalid choice. Please choose 'quantum (q)' or 'classic (c)'.")
-
+        move_type = ask_move(move_types)
+        move_done = False
         # Perform the chosen move
-        if move_type == "quantum" or move_type == "q":
-            quantum_move(board, current_player, player_o if current_player == player_x else player_x, move_list, player_list)
-        else:
-            classic_move(board, current_player)
+        while not move_done:
+            if move_type == "quantum" or move_type == "q":
+                if quantum_possible(board, [current_player, other_player]):
+                    move_done = quantum_move(board, current_player, other_player, move_list, player_list)
+                else:
+                    print("No quantum moves possible..")
+                    move_type = ask_move(move_types)
+            else:
+                move_done = classic_move(board, current_player)
 
         if check_end_game(board, current_player):
             return
@@ -45,6 +46,7 @@ def play_game(simulate=True, service=None):
             return
 
         # Switch player
+        other_player = current_player
         current_player = player_o if current_player == player_x else player_x
 
 
