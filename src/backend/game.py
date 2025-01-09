@@ -1,5 +1,5 @@
 from qiskit_ibm_runtime import QiskitRuntimeService
-from functions import *
+from backend.functions import *
 
 
 def play_game(simulate=True, service=None):

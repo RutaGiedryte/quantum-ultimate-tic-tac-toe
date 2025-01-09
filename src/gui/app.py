@@ -1,6 +1,6 @@
 from tkinter import Tk, StringVar, S, ttk
 from enum import Enum
-from board import Board
+from gui.board import Board
 
 
 class MoveType(Enum):
@@ -121,20 +121,3 @@ class App:
 
         print(f"Chose {type} move")
         # Todo: move type click logic
-
-
-def main():
-    root = Tk()
-    root.title("Quantum Tic-Tac-Toe")
-    root.geometry("500x500")
-
-    # quit with escape
-    root.bind("<Escape>", lambda x: root.destroy())
-
-    App(root, ultimate=False)
-
-    root.mainloop()
-
-
-if __name__ == "__main__":
-    main()
