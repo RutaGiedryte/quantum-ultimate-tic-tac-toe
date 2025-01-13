@@ -282,8 +282,8 @@ def check_win(board: list[State]) -> State:
     for comb in combinations:
         row = (board[comb[0]], board[comb[1]], board[comb[2]])
 
-        # check if any empty cells
-        full = full and any(state == State.EMPTY for state in row)
+        # check if all full
+        full = full and all(state != State.EMPTY for state in row)
 
         current_winner = State.EMPTY
 
