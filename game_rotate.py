@@ -324,8 +324,8 @@ def main():
             )
             if move_type not in move_types:
                 print("Invalid move type!")
-
-            break
+            else:
+                break
 
         collapsed = False
 
