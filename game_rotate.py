@@ -151,9 +151,17 @@ def rotate(board: list[State], qc: QuantumCircuit, axis: Axis) -> None:
 
     remaining_rotation = MAX_ANGLE
 
+    used = set()
+
     for _ in range(n):
         # get position
-        pos = get_valid_position(board)
+        pos = 0
+        while True:
+            pos = get_valid_position(board)
+            if pos in used:
+                print("You already rotated this qubit.")
+            else:
+                break
 
         # get angle
         angle = get_float(
@@ -173,6 +181,8 @@ def rotate(board: list[State], qc: QuantumCircuit, axis: Axis) -> None:
                 qc.ry(angle, pos)
             case Axis.Z:
                 qc.rz(angle, pos)
+
+        used.add(pos)
 
 
 def rotate_controlled(board: list[State], qc: QuantumCircuit, axis: Axis) -> None:
