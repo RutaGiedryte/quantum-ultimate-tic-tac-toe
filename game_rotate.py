@@ -186,7 +186,8 @@ def rotate_controlled(board: list[State], qc: QuantumCircuit, axis: Axis) -> Non
         target = get_valid_position(board)
         if target == control:
             print("Target cannot be the same as control.")
-        break
+        else:
+            break
 
     # get angle
     angle = get_float(
