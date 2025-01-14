@@ -1,0 +1,362 @@
+from termcolor import colored
+import qiskit
+from qiskit import transpile
+from qiskit_aer import AerSimulator
+from qiskit.transpiler import CouplingMap
+
+###############################################################################
+# 1) FULLY CONNECTED 81-QUBIT COUPLING MAP
+###############################################################################
+def fully_connected_81_coupling():
+    """
+    Build a CouplingMap claiming all 81 qubits are fully connected,
+    so we avoid 'CircuitTooWideForTarget' errors and skip routing.
+    """
+    edges = []
+    for i in range(81):
+        for j in range(81):
+            if i != j:
+                edges.append((i, j))
+    return CouplingMap(edges)
+
+###############################################################################
+# 2) BOARD & CHECKS
+###############################################################################
+def resetBoard():
+    """
+    theBoard[sb][cell] = ' ' or 'X' or 'O'.
+    topBoard[sb] = ' ', 'X', or 'O' to track sub-board winners.
+    """
+    theBoard = {}
+    for sb in range(1,10):
+        sbID = str(sb)
+        theBoard[sbID] = {}
+        for c in range(1,10):
+            theBoard[sbID][str(c)] = ' '
+    topBoard = {}
+    for sb in range(1,10):
+        topBoard[str(sb)] = ' '
+    return theBoard, topBoard
+
+def check_subboard_win(theBoard, sbID):
+    lines = [
+      ('1','2','3'), ('4','5','6'), ('7','8','9'),
+      ('1','4','7'), ('2','5','8'), ('3','6','9'),
+      ('1','5','9'), ('3','5','7')
+    ]
+    b = theBoard[sbID]
+    for (a,bv,c) in lines:
+        if b[a] == b[bv] == b[c] != ' ':
+            return b[a]
+    return ' '
+
+def check_topboard_win(topBoard):
+    lines = [
+      ('1','2','3'), ('4','5','6'), ('7','8','9'),
+      ('1','4','7'), ('2','5','8'), ('3','6','9'),
+      ('1','5','9'), ('3','5','7')
+    ]
+    for (x,y,z) in lines:
+        if topBoard[x] == topBoard[y] == topBoard[z] != ' ':
+            return topBoard[x]
+    return ' '
+
+###############################################################################
+# 3) PRINTING THE 9×9
+###############################################################################
+def printBoard(theBoard, topBoard, forcedSubBoards):
+    SUBBOARD_SEP = "||"
+    ROW_SEP      = "=" * 45
+    COL_SEP      = "|"
+
+    print("\nCurrent 9×9 Board:\n")
+
+    for subBoardRow in range(3):
+        for rowWithin in range(3):
+            row_parts = []
+            for subBoardCol in range(3):
+                sbIndex = 3*subBoardRow + (subBoardCol+1)
+                sbID = str(sbIndex)
+                start_cell = 3*rowWithin + 1
+                sub_line = []
+                for offset in range(3):
+                    cID = str(start_cell + offset)
+                    mark = theBoard[sbID][cID]
+                    if sbID in forcedSubBoards:
+                        sub_line.append(colored(mark, 'yellow') if mark!=' ' else colored(' ', 'yellow'))
+                    else:
+                        sub_line.append(mark if mark!=' ' else ' ')
+                row_parts.append(COL_SEP.join(sub_line))
+            print(f" {SUBBOARD_SEP} ".join(row_parts))
+        if subBoardRow<2:
+            print(ROW_SEP)
+    print("\nTop Board (3x3 sub-board winners):")
+    for rowBlock in range(3):
+        line = []
+        for colBlock in range(3):
+            sbID = str(3*rowBlock + (colBlock+1))
+            line.append(topBoard[sbID])
+        print(" | ".join(line))
+        if rowBlock<2:
+            print("-+-+-")
+
+    if forcedSubBoards:
+        fs = sorted(list(forcedSubBoards))
+        print(f"\nNext move MUST be in sub-board(s): {', '.join(fs)}")
+    else:
+        print("\nNext move is free to choose any sub-board.")
+
+###############################################################################
+# 4) PARTIAL COLLAPSE (MEASURES ONLY QUBITS IN usedQubits)
+###############################################################################
+def partial_collapse(circuit, usedQubits, quantumSquares, theBoard, topBoard):
+    """
+    Measure ONLY the qubits in usedQubits.
+    bit=0 => square -> empty
+    bit=1 => square -> occupant in quantumSquares
+    Then reset those qubits.
+    We use a fully connected 81-qubit coupling map to avoid 'CircuitTooWideForTarget'.
+    """
+    if not usedQubits:
+        print("No quantum squares to collapse right now.")
+        return
+
+    print("\n--- PARTIAL COLLAPSE ---")
+
+    # measure only those qubits
+    for q in usedQubits:
+        circuit.measure(q, q)
+
+    fc_map = fully_connected_81_coupling()
+    simulator = AerSimulator(method='matrix_product_state')
+
+    compiled = transpile(
+        circuit,
+        simulator,
+        coupling_map=fc_map,    # fully connected
+        routing_method='none',  # skip routing
+        layout_method='trivial',
+        optimization_level=0
+    )
+    job = simulator.run(compiled, shots=1)
+    result = job.result()
+
+    counts = result.get_counts()
+    bitstring = list(counts.keys())[0]
+    bitstring = bitstring[::-1]
+
+    for q in list(usedQubits):
+        sb_int = q // 9 + 1
+        c_int  = q % 9 + 1
+        sb_str = str(sb_int)
+        c_str  = str(c_int)
+        bit = bitstring[q]
+        if bit == '0':
+            theBoard[sb_str][c_str] = ' '
+        else:
+            if (sb_str,c_str) in quantumSquares:
+                theBoard[sb_str][c_str] = quantumSquares[(sb_str,c_str)]
+            else:
+                theBoard[sb_str][c_str] = 'X'  # fallback if not tracked
+
+        if (sb_str,c_str) in quantumSquares:
+            quantumSquares.pop((sb_str,c_str))
+
+    # reset those qubits
+    for q in usedQubits:
+        circuit.reset(q)
+
+    # re-apply X gates for squares that remain
+    idx=0
+    for sb in range(1,10):
+        for cell in range(1,10):
+            if theBoard[str(sb)][str(cell)] != ' ':
+                circuit.x(idx)
+            idx+=1
+
+    usedQubits.clear()
+    print("Partial collapse done!\n")
+
+    print("\nCircuit after partial collapse:\n")
+    print(circuit.draw())
+
+###############################################################################
+# 5) MAIN GAME LOOP
+###############################################################################
+def play_game():
+    theBoard, topBoard = resetBoard()
+    forcedSubBoards = set()
+    turn = 'X'
+
+    circuit = qiskit.QuantumCircuit(81,81)
+    usedQubits = set()         # which qubits are truly quantum
+    quantumSquares = {}        # (sb,c) -> 'X'/'O'
+
+    while True:
+        printBoard(theBoard, topBoard, forcedSubBoards)
+
+        # check top-level winner
+        tw = check_topboard_win(topBoard)
+        if tw in ['X','O']:
+            print(f"\nPlayer {tw} has won the entire board!")
+            break
+
+        # check tie
+        all_full = True
+        for sb in range(1,10):
+            sbID = str(sb)
+            if topBoard[sbID]==' ':
+                empties = [c for c,v in theBoard[sbID].items() if v==' ']
+                if empties:
+                    all_full = False
+                    break
+        if all_full:
+            print("\nAll sub-boards are decided or full => It's a tie!")
+            break
+
+        print(f"\nIt's {turn}'s turn.")
+        print("[1] Classical move   [2] Quantum move   [3] Partial collapse   [4] Quit")
+        choice = input("> ")
+
+        if choice=='4':
+            print("\nQuitting.")
+            break
+
+        elif choice=='3':
+            # partial measure only used qubits
+            partial_collapse(circuit, usedQubits, quantumSquares, theBoard, topBoard)
+            continue
+
+        elif choice=='1':
+            # CLASSICAL move
+            while True:
+                sb = input("Which sub-board (1..9)? ")
+                if sb not in [str(i) for i in range(1,10)]:
+                    print("Invalid sub-board.")
+                    continue
+                if forcedSubBoards and sb not in forcedSubBoards:
+                    print("That sub-board isn't allowed this turn.")
+                    continue
+                if topBoard[sb] != ' ':
+                    print("That sub-board is already won.")
+                    continue
+                empt = [c for c,v in theBoard[sb].items() if v==' ']
+                if not empt:
+                    print("That sub-board is full.")
+                    continue
+
+                cID = input("Which cell (1..9)? ")
+                if cID not in empt:
+                    print("Invalid or occupied.")
+                    continue
+
+                # place classical
+                theBoard[sb][cID] = turn
+
+                # for classical squares, we do x-gate but not track in usedQubits
+                qIndex = (int(sb)-1)*9 + (int(cID)-1)
+                circuit.x(qIndex)
+
+                w = check_subboard_win(theBoard, sb)
+                if w!=' ':
+                    topBoard[sb] = w
+
+                # next forced sub-board => {cID} if valid
+                forcedSubBoards = set()
+                if cID in [str(i) for i in range(1,10)]:
+                    if topBoard[cID]==' ':
+                        empt2 = [cc for cc,vv in theBoard[cID].items() if vv==' ']
+                        if empt2:
+                            forcedSubBoards = {cID}
+                break
+
+            print("\nCircuit after classical move:\n")
+            print(circuit.draw())
+
+            turn = 'O' if turn=='X' else 'X'
+
+        elif choice=='2':
+            # QUANTUM => pick TWO squares => {c1,c2} forced
+            while True:
+                validSBs = forcedSubBoards if forcedSubBoards else set(str(i) for i in range(1,10))
+                print(f"Possible sub-boards: {validSBs}")
+                sb1 = input("Sub-board for FIRST mark: ")
+                if sb1 not in validSBs:
+                    print("Invalid sub-board.")
+                    continue
+                if topBoard[sb1] != ' ':
+                    print("That sub-board is won.")
+                    continue
+                empt1 = [c for c,v in theBoard[sb1].items() if v==' ']
+                if not empt1:
+                    print("That sub-board is full.")
+                    continue
+                c1 = input("Cell (1..9) for FIRST mark? ")
+                if c1 not in empt1:
+                    print("Invalid/occupied.")
+                    continue
+
+                sb2 = input("Sub-board for SECOND mark: ")
+                if sb2 not in validSBs:
+                    print("Invalid sub-board.")
+                    continue
+                if topBoard[sb2] != ' ':
+                    print("That sub-board is won.")
+                    continue
+                empt2 = [c for c,v in theBoard[sb2].items() if v==' ']
+                if not empt2:
+                    print("That sub-board is full.")
+                    continue
+                c2 = input("Cell (1..9) for SECOND mark? ")
+                if c2 not in empt2:
+                    print("Invalid/occupied.")
+                    continue
+
+                if sb1==sb2 and c1==c2:
+                    print("Cannot place two marks on the same square!")
+                    continue
+
+                theBoard[sb1][c1] = turn
+                theBoard[sb2][c2] = turn
+
+                # apply quantum gates
+                q1 = (int(sb1)-1)*9 + (int(c1)-1)
+                q2 = (int(sb2)-1)*9 + (int(c2)-1)
+                circuit.h(q1)
+                circuit.x(q2)
+                circuit.cx(q1,q2)
+
+                # track them in usedQubits, quantumSquares
+                usedQubits.add(q1)
+                usedQubits.add(q2)
+                quantumSquares[(sb1,c1)] = turn
+                quantumSquares[(sb2,c2)] = turn
+
+                # next forced sub-boards => {c1,c2} if valid
+                newF = set()
+                for x in [c1,c2]:
+                    if x in [str(i) for i in range(1,10)]:
+                        if topBoard[x]==' ':
+                            empt3 = [xx for xx,vv in theBoard[x].items() if vv==' ']
+                            if empt3:
+                                newF.add(x)
+                forcedSubBoards = newF
+                break
+
+            print("\nCircuit after quantum move:\n")
+            print(circuit.draw())
+
+            turn = 'O' if turn=='X' else 'X'
+
+        else:
+            print("Invalid choice, try again.")
+
+    print("\nGame Over. Final Board:")
+    printBoard(theBoard, topBoard, forcedSubBoards)
+
+###############################################################################
+# 6) RUN
+###############################################################################
+if __name__=="__main__":
+    play_game()
+
