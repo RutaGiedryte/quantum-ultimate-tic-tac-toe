@@ -247,9 +247,6 @@ def collapse(board: list[State], qc: QuantumCircuit) -> None:
         if int(results["exist"][8 - i]):
             board[i] = State.X if int(results["symbol"][8 - i]) else State.O
 
-    # reset qubits
-    qc.reset(range(9))
-
     print("Collapsed board.")
 
 
@@ -367,6 +364,9 @@ def main():
                 else:
                     print(f"{winner} has won!")
                 break
+
+            # reset circuit
+            qc = QuantumCircuit(9, 9)
 
         turn = State.X if turn == State.O else State.O
 
