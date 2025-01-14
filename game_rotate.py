@@ -2,6 +2,7 @@ from enum import Enum
 from qiskit import QuantumCircuit, transpile
 from qiskit_ibm_runtime.fake_provider.fake_backend import FakeBackendV2
 from qiskit_aer import AerSimulator
+from collections.abc import Callable
 import math
 
 MAX_ANGLE = math.pi / 2
@@ -138,9 +139,14 @@ def rotate(board: list[State], qc: QuantumCircuit, axis: Axis) -> None:
         axis: axis to rotate around
     """
 
+    max_n = min(2, count_empty_cells(board))
+
     # get number of qubits to rotate
     n = get_int(
-        1, 2, "Number of qubits to rotate [1-2]: ", "Number of qubits can be at most 2."
+        1,
+        max_n,
+        f"Number of qubits to rotate (max. {max_n}): ",
+        f"Number of qubits can be at most {max_n}.",
     )
 
     remaining_rotation = MAX_ANGLE
@@ -208,7 +214,9 @@ def rotate_controlled(board: list[State], qc: QuantumCircuit, axis: Axis) -> Non
             qc.crz(angle, control, target)
 
 
-def collapse(board: list[State], qc: QuantumCircuit, backend: AerSimulator | FakeBackendV2) -> None:
+def collapse(
+    board: list[State], qc: QuantumCircuit, backend: AerSimulator | FakeBackendV2
+) -> None:
     """Measure the quantum circuit `qc`.
 
     Update `board` according to the results measured.
@@ -238,7 +246,7 @@ def collapse(board: list[State], qc: QuantumCircuit, backend: AerSimulator | Fak
 
     # update board
     for i in range(9):
-        # position already taeken
+        # position already taken
         if board[i] != State.EMPTY:
             continue
 
@@ -300,16 +308,77 @@ def check_win(board: list[State]) -> State:
     return winner
 
 
+def count_empty_cells(board: list[State]) -> int:
+    return sum([cell == State.EMPTY for cell in board])
+
+
+class MoveType:
+    """Class representing a move type.
+
+    Attributes:
+        description: description of the move type
+        min_empty: min. number of empty cells required for the move type
+        move: function to call when making the move
+    """
+
+    def __init__(
+        self,
+        description: str,
+        min_empty: int,
+        move: Callable[[list[State], QuantumCircuit], bool],
+    ) -> None:
+        """Create a move type object.
+
+        Args:
+            description: description of the move type
+            min_empty: min. number of empty cells required for the move type
+            move: function to call when making the move. the function should return whether the board collapsed
+        """
+
+        self._description = description
+        self._min_empty = min_empty
+        self._move = move
+
+    @property
+    def description(self) -> str:
+        return self._description
+
+    @property
+    def min_empty(self) -> int:
+        return self._min_empty
+
+    @property
+    def move(self) -> Callable[[list[State], QuantumCircuit], bool]:
+        return self._move
+
+
 def main():
     """Game loop."""
 
     # set backend
     backend = AerSimulator()
 
-    move_types = {"x", "z", "cy", "c"}
+    # initialise move types
+    move_types = {
+        "x": MoveType(
+            "rotate around x-axis", 1, lambda b, qc: bool(rotate(b, qc, Axis.X))
+        ),
+        "z": MoveType(
+            "rotate around z-axis", 1, lambda b, qc: bool(rotate(b, qc, Axis.Z))
+        ),
+        "cy": MoveType(
+            "controlled rotation around y-axis",
+            2,
+            lambda b, qc: bool(rotate_controlled(b, qc, Axis.Y)),
+        ),
+        "c": MoveType(
+            "collapse", 1, lambda b, qc: bool(collapse(b, qc, backend)) or True
+        ),
+    }
 
     turn = State.X
     moves = 0
+    empty = 9
 
     board = [State.EMPTY for _ in range(9)]
     qc = QuantumCircuit(9, 9)
@@ -318,41 +387,36 @@ def main():
         print_board(board)
         print(f"It's {turn}'s turn.")
 
+        # create prompt
+        prompt = "Select move type: "
+        for i, key in enumerate(move_types):
+            prompt += f"{move_types[key].description} [{key}]"
+            if i < len(move_types) - 1:
+                prompt += " | "
+        prompt += ": "
+
         # get move type
         move_type = None
+
         while True:
-            move_type = input(
-                "Select move type: rotate around x-axis [x] | rotate around z-axis [z] | controlled rotation around y-axis [cy] | collapse [c]: "
-            )
-            if move_type not in move_types:
+            move_type = input(prompt)
+            if move_type not in move_types.keys():
                 print("Invalid move type!")
             else:
                 break
 
-        collapsed = False
-
-        match move_type:
-            case "x":
-                rotate(board, qc, Axis.X)
-            case "z":
-                rotate(board, qc, Axis.Z)
-            case "cy":
-                rotate_controlled(board, qc, Axis.Y)
-            case "c":
-                collapse(board, qc, backend)
-                collapsed = True
-                moves = -1
+        collapsed = move_types[move_type].move(board, qc)
 
         moves += 1
 
         # draw circuit
-        print(qc.draw())
+        if not collapsed:
+            print(qc.draw())
 
         # collapse when MAX_MOVES since last collapse
-        if moves == MAX_MOVES:
+        if not collapsed and moves == MAX_MOVES:
             collapse(board, qc, backend)
             collapsed = True
-            moves = 0
 
         # check win if collapsed
         if collapsed:
@@ -369,6 +433,16 @@ def main():
 
             # reset circuit
             qc = QuantumCircuit(9, 9)
+
+            # get the number of empty cells
+            empty = count_empty_cells(board)
+
+            # remove unavailable moves
+            move_types = {
+                key: val for key, val in move_types.items() if empty >= val.min_empty
+            }
+
+            moves = 0
 
         turn = State.X if turn == State.O else State.O
 
