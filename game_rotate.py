@@ -1,6 +1,7 @@
 from enum import Enum
 from qiskit import QuantumCircuit, transpile
-from qiskit_ibm_runtime.fake_provider import FakeAlmadenV2
+from qiskit_ibm_runtime.fake_provider.fake_backend import FakeBackendV2
+from qiskit_aer import AerSimulator
 import math
 
 MAX_ANGLE = math.pi / 2
@@ -207,7 +208,7 @@ def rotate_controlled(board: list[State], qc: QuantumCircuit, axis: Axis) -> Non
             qc.crz(angle, control, target)
 
 
-def collapse(board: list[State], qc: QuantumCircuit) -> None:
+def collapse(board: list[State], qc: QuantumCircuit, backend: AerSimulator | FakeBackendV2) -> None:
     """Measure the quantum circuit `qc`.
 
     Update `board` according to the results measured.
@@ -222,8 +223,6 @@ def collapse(board: list[State], qc: QuantumCircuit) -> None:
     # change basis for symbols
     for i in range(9):
         qcs["symbol"].h(i)
-
-    backend = FakeAlmadenV2()
 
     results = {}
 
@@ -304,6 +303,9 @@ def check_win(board: list[State]) -> State:
 def main():
     """Game loop."""
 
+    # set backend
+    backend = AerSimulator()
+
     move_types = {"x", "z", "cy", "c"}
 
     turn = State.X
@@ -337,7 +339,7 @@ def main():
             case "cy":
                 rotate_controlled(board, qc, Axis.Y)
             case "c":
-                collapse(board, qc)
+                collapse(board, qc, backend)
                 collapsed = True
                 moves = -1
 
@@ -348,7 +350,7 @@ def main():
 
         # collapse when MAX_MOVES since last collapse
         if moves == MAX_MOVES:
-            collapse(board, qc)
+            collapse(board, qc, backend)
             collapsed = True
             moves = 0
 
