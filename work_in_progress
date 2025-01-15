@@ -92,7 +92,7 @@ def check_topboard_win(topBoard):
 def printBoard(theBoard, topBoard, forcedBoards):
     print("\nULTIMATE QUANTUM TIC-TAC-TOE (81 Qubits)\n")
     SUBBOARD_SEP = "||"
-    ROW_SEP = "=" * 45
+    ROW_SEP = "=" * 23
     COL_SEP = "|"
 
     for subBoardRow in range(3):
