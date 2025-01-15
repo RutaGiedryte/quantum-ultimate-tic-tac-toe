@@ -2,29 +2,28 @@ from tkinter import Widget, ttk
 from collections.abc import Callable
 
 
-class Board:
+class Board(ttk.Frame):
     """Widget represeting the board."""
 
     def __init__(
-        self, parent: Widget, width: int, callback: Callable[[int], None]
+        self, parent: Widget, width: int, callback: Callable[[int], None], **kw
     ) -> None:
         """Create board widget.
 
         Args:
             parent: parent widget
             width: board width
-            callback: callback function for clicking on cell
+            callback: callback function for clicking on a cell
+            kw: keyword arguments for `ttk.Frame`
         """
 
-        # create board frame
-        self._boardframe = ttk.Frame(parent, padding=5)
+        super().__init__(parent, **kw)
 
         cell_width = width // 3
 
         # create cells
         cellframes = [
-            ttk.Frame(self._boardframe, width=cell_width, height=cell_width)
-            for i in range(9)
+            ttk.Frame(self, width=cell_width, height=cell_width) for i in range(9)
         ]
         for i in range(9):
             cellframes[i].grid(row=i // 3, column=i % 3)
@@ -38,16 +37,6 @@ class Board:
         ]
         for cell_button in self._cell_buttons:
             cell_button.grid(row=0, column=0, sticky="NWSE")
-
-    def grid(self, row: int, column: int) -> None:
-        """Position the board in the parent widget.
-
-        Args:
-            row: row in grid
-            column: column in grid
-        """
-
-        self._boardframe.grid(row=row, column=column)
 
     def enable(self, cells: list[int]) -> None:
         """Enable `cells` of the board.

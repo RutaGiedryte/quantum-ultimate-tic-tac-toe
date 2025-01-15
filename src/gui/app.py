@@ -1,26 +1,15 @@
-from tkinter import Tk, StringVar, S, ttk
-from enum import Enum
-from gui.board import Board
-
-
-class MoveType(Enum):
-    CLASSICAL = 0
-    QUANTUM = 1
-
-    def __str__(self) -> str:
-        """Get string representation of the move type."""
-
-        match self:
-            case MoveType.CLASSICAL:
-                return "classical"
-            case MoveType.QUANTUM:
-                return "quantum"
+from tkinter import Tk, StringVar, ttk
+from gui.widgets.angle_selection import AngleSelection
+from gui.widgets.board import Board
+from backend.game import Axis
+from gui.widgets.move_selection import MoveInfo, MoveSelection
+from gui.widgets.number_selection import NumberSelection
 
 
 class App:
     """Main application."""
 
-    def __init__(self, root: Tk, ultimate: bool, width: int = 300) -> None:
+    def __init__(self, root: Tk, ultimate: bool, width: int = 500) -> None:
         """Create application.
 
         Args:
@@ -29,15 +18,32 @@ class App:
             width: width of the board
         """
 
+        # vertical padding for elements
+        row_padding = "0 10"
+
+        # row numbers
+        info_row = 0
+        board_row = 1
+        buttons_row = 2
+
         # create main frame
         mainframe = ttk.Frame(root)
         mainframe.grid(row=0, column=0)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
+        # create info label
+        self._info_text = StringVar()
+        self._info_text.set("It's X's turn")
+
+        info_label = ttk.Label(
+            mainframe, textvariable=self._info_text, padding=row_padding
+        )
+        info_label.grid(row=info_row, column=0)
+
         # create board frame
-        boardframe = ttk.Frame(mainframe)
-        boardframe.grid(row=1, column=0)
+        boardframe = ttk.Frame(mainframe, padding=row_padding)
+        boardframe.grid(row=board_row, column=0)
 
         board_width = width // 3 if ultimate else width
         n_boards = 9 if ultimate else 1
@@ -50,55 +56,51 @@ class App:
         for i in range(n_boards):
             self._boards[i].grid(row=i // 3, column=i % 3)
 
-        # create info label
-        self._info_text = StringVar()
+        # moves
+        self._moves = [
+            MoveInfo("x", "x-rotation", 1, lambda: self._rotate(Axis.X)),
+            MoveInfo("z", "z-rotation", 1, lambda: self._rotate(Axis.Z)),
+            MoveInfo(
+                "cy",
+                "controlled y-rotation",
+                2,
+                lambda: self._rotate_controlled(Axis.Y),
+            ),
+            MoveInfo("c", "collapse", 1, self._collapse),
+        ]
 
-        info_label = ttk.Label(mainframe, textvariable=self._info_text)
-        info_label.grid(row=0, column=0)
-
-        # create board frame
-        boardframe = ttk.Frame(mainframe, padding="0 25")
-        boardframe.grid(row=1, column=0)
-
-        # create move type frame
-        self._move_type_frame = ttk.Frame(mainframe)
-        self._move_type_frame.grid(row=2, column=0, sticky=S)
-
-        # create move type buttons
-        self._classical_button = ttk.Button(
-            self._move_type_frame,
-            text="Classical",
-            command=lambda: self._click_move_type(MoveType.CLASSICAL),
+        # create move type selection widget
+        self._move_selection = MoveSelection(
+            mainframe, self._moves, 2, padding=row_padding
         )
-        self._classical_button.grid(row=0, column=0)
+        self._move_selection.grid(row=buttons_row, column=0)
 
-        self._quantum_button = ttk.Button(
-            self._move_type_frame,
-            text="Quantum",
-            command=lambda: self._click_move_type(MoveType.QUANTUM),
+        # create number of qubits selection widget
+        self._number_selection = NumberSelection(
+            mainframe, 2, 2, self._select_number_of_qubits, padding=row_padding
         )
-        self._quantum_button.grid(row=0, column=2)
+        self._number_selection.grid(row=buttons_row, column=0)
+        self._number_selection.grid_forget()
+
+        # create angle selection widget
+        self._angle = StringVar()
+        self._angle_selection = AngleSelection(
+            mainframe, self._angle, self._set_rotation_angle, padding=row_padding
+        )
+        self._angle_selection.grid(row=buttons_row, column=0)
+        self._angle_selection.grid_forget()
 
         # create reset button
-        self._reset_button = ttk.Button(mainframe, text="Play again")
-        self._reset_button.grid(row=3, column=0)
+        self._reset_button = ttk.Button(
+            mainframe, text="Play again", padding=row_padding, width=10
+        )
+        self._reset_button.grid(row=buttons_row, column=0)
         self._reset_button.grid_forget()
 
     def _reset_widgets(self) -> None:
         """Reset widgets to their default state."""
 
-        # reset boards
-        for board in self._boards:
-            board.reset()
-
-        # reset move type buttons
-        self._classical_button["state"] = "normal"
-        self._quantum_button["state"] = "normal"
-
-        # hide reset button
-        self._reset_button.grid_forget()
-        # display move type frame
-        self._move_type_frame.grid_forget()
+        print("Reset game")
 
     def _click_cell(self, board: int, cell: int) -> None:
         """Callback function for clicking on cell `cell` of board `board`.
@@ -109,15 +111,40 @@ class App:
         """
 
         print(f"Clicked cell {cell} of board {board}")
-        # Todo: move to `Board` class?
-        # Todo: cell click logic
 
-    def _click_move_type(self, type: MoveType) -> None:
-        """Callback function for clicking on move type button.
+    def _rotate(self, axis: Axis) -> None:
+        """Callback function for clicking rotate move button.
 
         Args:
-            type: move type
+            axis: axis to rotate around
         """
 
-        print(f"Chose {type} move")
-        # Todo: move type click logic
+        print(f"Rotate around {axis}-axis")
+
+    def _rotate_controlled(self, axis: Axis) -> None:
+        """Callback function for clicking controlled rotation move button.
+
+        Args:
+            axis: axis to rotate around
+        """
+
+        print(f"Controlled rotation around {axis}-axis")
+
+    def _collapse(self) -> None:
+        """Callback function for clicking collapse move button."""
+
+        print("Collapse")
+
+    def _select_number_of_qubits(self, n: int) -> None:
+        """Callback function for selecting the number of qubits to rotate.
+
+        Args:
+            n: number of qubits to rotate
+        """
+
+        print(f"Rotating {n} qubits")
+
+    def _set_rotation_angle(self) -> None:
+        """Callback function for setting the rotation angle."""
+
+        print(f"Rotate by {self._angle.get()}")
