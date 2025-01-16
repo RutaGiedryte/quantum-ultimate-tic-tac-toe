@@ -230,7 +230,7 @@ class MoveType:
         return self._move
 
 
-def qtt_cli(ultimate: bool):
+def qttt_cli(ultimate: bool):
     """Game loop.
 
     Args:
@@ -311,7 +311,7 @@ def qtt_cli(ultimate: bool):
 
 
 def main():
-    qtt_cli(False)
+    qttt_cli(False)
 
 
 if __name__ == "__main__":
