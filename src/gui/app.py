@@ -140,6 +140,8 @@ class App:
             case Move.CRY:
                 # control qubit has been selected - add gate
                 if self._game.has_control():
+                    c_board, c_cell = self._game.get_control()
+                    self._board.entangle(c_board, c_cell, board, cell)
                     collapsed = self._game.rotate_target(
                         board, cell, Axis.Y, float(self._angle.get())
                     )

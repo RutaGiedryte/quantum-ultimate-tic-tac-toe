@@ -77,6 +77,36 @@ class Board(ttk.Frame):
             for b in range(9 if ultimate else 1)
         ]
 
+    def entangle(self, c_board: int, c_cell: int, t_board: int, t_cell: int) -> None:
+        """Create arrow from control to target.
+
+        Args:
+            c_board: control board index
+            c_cell: control cell index
+            t_board: target board index
+            t_cell: target cell index
+        """
+
+        cx, cy = self._index_to_pos(c_board, c_cell)
+        tx, ty = self._index_to_pos(t_board, t_cell)
+
+        width = 4
+        color = "#FFA35C"
+        arrow_shape = (20, 20, 5)
+
+        self._entanglement_ids.append(
+            self._canvas.create_line(
+                cx,
+                cy,
+                tx,
+                ty,
+                width=width,
+                fill=color,
+                arrowshape=arrow_shape,
+                arrow="last",
+            )
+        )
+
     def enable(self, board: int, cells: list[int]) -> None:
         """Enable `cells` of `board`.
 
@@ -100,13 +130,20 @@ class Board(ttk.Frame):
     def reset(self) -> None:
         """Reset the board to its default state.
 
-        Disables all cells, and clears text.
+        Clears cell symbols. Deletes entanglement lines.
         """
 
-        self._clear_symbols()
+        # clear symbols
+        for symbols in self._symbol_ids:
+            for symbol in symbols:
+                self._canvas.itemconfigure(symbol, text="", fill=self._default_color)
+
+        # delete lines
+        self._canvas.delete(*self._entanglement_ids)
+        self._entanglement_ids = []
 
     def update_display(self, board: int, states: list[State]) -> None:
-        """Update symbols to dislpay on `board`.
+        """Update symbols to display on `board`.
 
         Sets symbols according to cell states on board.
 
@@ -115,7 +152,7 @@ class Board(ttk.Frame):
             states: cell states on board
         """
 
-        self._clear_symbols()
+        self.reset()
 
         for i in range(9):
             color = self._default_color
@@ -196,13 +233,6 @@ class Board(ttk.Frame):
         cell_index = cell_y_index * 3 + cell_x_index
 
         return board_index, cell_index
-
-    def _clear_symbols(self):
-        """Set symbols to empty."""
-
-        for symbols in self._symbol_ids:
-            for symbol in symbols:
-                self._canvas.itemconfigure(symbol, text="", fill=self._default_color)
 
     def _create_grid(self, width, x, y) -> None:
         """Create grid lines.
