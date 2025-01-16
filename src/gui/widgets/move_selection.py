@@ -1,34 +1,37 @@
 from tkinter import Widget, ttk
+from enum import Enum
+
+
+class Move(Enum):
+    """Possible moves."""
+
+    RX = "x"
+    RZ = "Z"
+    CRY = "cy"
+    COLLAPSE = "c"
 
 
 class MoveInfo:
-    """Class represeting a move type.
-    
+    """Class containing information about a move.
+
     Attributes:
-        key: move type key
         text: text for displaying the move type
         min_empty: min. number of empty cells required for the move
         callback: function to call when selecting the move type
     """
 
-    def __init__(self, key: str, text: str, min_empty: int, callback) -> None:
+    def __init__(self, text: str, min_empty: int, callback) -> None:
         """Create move info.
-        
+
         Args:
-            key: move type key
             text: text for displaying the mmove type
             min_empty: min. number of empty cells required for the move
             callback: function to call when selecting the move type
         """
 
-        self._key = key
         self._text = text
         self._min_empty = min_empty
         self._callback = callback
-
-    @property
-    def key(self) -> str:
-        return self._key
 
     @property
     def text(self) -> str:
@@ -46,9 +49,11 @@ class MoveInfo:
 class MoveSelection(ttk.Frame):
     """Widget for selecting the move type."""
 
-    def __init__(self, parent: Widget, moves: list[MoveInfo], cols: int, **kw) -> None:
+    def __init__(
+        self, parent: Widget, moves: dict[Move, MoveInfo], cols: int, **kw
+    ) -> None:
         """Create move selection widget.
-        
+
         Args:
             parent: parent widget
             moves: list of possible moves
@@ -64,14 +69,12 @@ class MoveSelection(ttk.Frame):
         )
 
         # button width in number of chars
-        width = max([len(move.text) for move in moves])
+        width = max([len(move.text) for move in moves.values()])
 
         # create buttons
         self._buttons = {
-            info.key: ttk.Button(
-                self, text=info.text, command=info.callback, width=width
-            )
-            for info in moves
+            move: ttk.Button(self, text=info.text, command=info.callback, width=width)
+            for move, info in moves.items()
         }
 
         # set positions
@@ -79,3 +82,16 @@ class MoveSelection(ttk.Frame):
             row = i // cols + 1
             col = i % cols
             self._buttons[key].grid(row=row, column=col)
+
+    def enable(self, moves: set[Move]) -> None:
+        """Enable move buttons.
+
+        Args:
+            moves: moves to enable
+        """
+
+        for move, button in self._buttons.items():
+            if move in moves:
+                button["state"] = "normal"
+            else:
+                button["state"] = "disabled"

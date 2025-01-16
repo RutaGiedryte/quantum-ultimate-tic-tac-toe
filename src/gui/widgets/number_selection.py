@@ -9,7 +9,7 @@ class NumberSelection(ttk.Frame):
 
         Args:
             parent: parent widget
-            max_n: max number of qubits that can be rotated in one move
+            max_n: max number of qubits that can be rotated in one turn
             cols: number of columns to use for displaying the buttons
             callback: function to call when selecting the number of qubits. the function should take the number of qubits as an argument.
             kw: keyword arguments for `ttk.Frame`
@@ -25,7 +25,7 @@ class NumberSelection(ttk.Frame):
         ).grid(row=0, column=0, columnspan=2)
 
         # create number of qubits buttons
-        self._qubit_number_buttons = [
+        self._buttons = [
             ttk.Button(
                 self,
                 text=n + 1,
@@ -34,7 +34,19 @@ class NumberSelection(ttk.Frame):
             for n in range(max_n)
         ]
 
-        for i, button in enumerate(self._qubit_number_buttons):
+        for i, button in enumerate(self._buttons):
             row = i // cols + 1
             col = i % cols
             button.grid(row=row, column=col)
+
+    def set_max(self, n: int) -> None:
+        """Set max. number of qubits that can be rotated this turn.
+
+        Args:
+            n: number of qubits that can be rotated
+        """
+        for i, button in enumerate(self._buttons):
+            if i + 1 > n:
+                button["state"] = "disabled"
+            else:
+                button["state"] = "normal"

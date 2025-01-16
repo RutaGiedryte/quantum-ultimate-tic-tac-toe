@@ -7,11 +7,10 @@ version = "0.0.1"
 dependencies = ["qiskit", "qiskit-aer", "qiskit-ibm-runtime"]
 
 [project.gui-scripts]
-qttt = "main:main"
+qttt = "main_gui:main"
 
-# Todo: remove when GUI works
 [project.scripts]
-qttt-cli = "backend.game:play_game"
+qttt-cli = "main_cli:main"
 
 [build-system]
 requires = ["setuptools"]

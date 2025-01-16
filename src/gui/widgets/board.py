@@ -1,6 +1,8 @@
 from tkinter import Widget, ttk
 from collections.abc import Callable
 
+from backend.quantum_tic_tac_toe import State
+
 
 class Board(ttk.Frame):
     """Widget represeting the board."""
@@ -32,7 +34,12 @@ class Board(ttk.Frame):
             cellframes[i].grid_propagate(False)
 
         self._cell_buttons = [
-            ttk.Button(cellframes[i], command=lambda i=i: callback(i), state="disabled")
+            ttk.Button(
+                cellframes[i],
+                command=lambda i=i: callback(i),
+                state="disabled",
+                style="Cell.TButton",
+            )
             for i in range(9)
         ]
         for cell_button in self._cell_buttons:
@@ -57,9 +64,36 @@ class Board(ttk.Frame):
     def reset(self) -> None:
         """Reset the board to its default state.
 
-        Disable all buttons, and clears text.
+        Disables all buttons, and clears text.
         """
 
         for button in self._cell_buttons:
             button["state"] = "disabled"
             button["text"] = ""
+            button["style"] = "Cell.TButton"
+
+    def update_display(self, states: list[State]) -> None:
+        """Update symbols to dislpay.
+
+        Sets symbols according to cell states on board.
+
+        Args:
+            states: cell states on board
+        """
+
+        for i in range(9):
+            self._cell_buttons[i]["text"] = states[i]
+            if states[i] == State.X:
+                self._cell_buttons[i]["style"] = "X.Cell.TButton"
+            if states[i] == State.O:
+                self._cell_buttons[i]["style"] = "O.Cell.TButton"
+
+    def touch_cell(self, cell):
+        """Touch cell `cell`.
+
+        Changes the representation of the cell.
+
+        Args:
+            cell: cell index to touch
+        """
+        self._cell_buttons[cell]["text"] = "?"
