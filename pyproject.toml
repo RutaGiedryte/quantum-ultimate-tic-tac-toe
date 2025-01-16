@@ -1,0 +1,20 @@
+[project]
+name = "quantum-tic-tac-toe"
+authors = []
+description = "Quantum Tic-Tac-Toe"
+readme = "README.md"
+version = "0.0.1"
+dependencies = ["qiskit", "qiskit-aer", "qiskit-ibm-runtime"]
+
+[project.gui-scripts]
+qttt = "main_gui:main"
+
+[project.scripts]
+qttt-cli = "main_cli:main"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

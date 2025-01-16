@@ -1,41 +1,8 @@
-from enum import Enum
-from qiskit import QuantumCircuit, transpile
-from qiskit_ibm_runtime.fake_provider.fake_backend import FakeBackendV2
 from qiskit_aer import AerSimulator
 from collections.abc import Callable
 import math
 
-MAX_ANGLE = math.pi / 2
-MAX_CONTROLLED_ANGLE = math.pi
-MAX_MOVES = 10
-
-
-class State(Enum):
-    """State of a cell on board, or the winner of a game."""
-
-    EMPTY = 0
-    X = 1
-    O = 2
-    DRAW = 3
-
-    def __str__(self) -> str:
-        match self:
-            case State.EMPTY:
-                return " "
-            case State.X:
-                return "X"
-            case State.O:
-                return "O"
-            case State.DRAW:
-                return "draw"
-
-
-class Axis(Enum):
-    """Rotation axis."""
-
-    X = 0
-    Y = 1
-    Z = 2
+from backend.quantum_tic_tac_toe import Axis, QuantumTicTacToe, State
 
 
 def print_board(board: list[State]):
@@ -44,6 +11,8 @@ def print_board(board: list[State]):
     Args:
         board: board to print
     """
+
+    assert len(board) == 9, "Not a valid board"
 
     print("\n")
     print(f"  {board[0]} | {board[1]} | {board[2]}")
@@ -104,13 +73,14 @@ def get_float(min: float, max: float, prompt: str, error: str) -> float:
 def get_valid_position(board: list[State]) -> int:
     """Get cell index from stdin that has not been taken on `board`.
 
-
     Args:
         board: board
 
     Returns:
         cell index
     """
+
+    assert len(board) == 9, "Not a valid board"
 
     while True:
         pos = get_int(
@@ -129,17 +99,18 @@ def get_valid_position(board: list[State]) -> int:
             print("This cell already has a value.")
 
 
-def rotate(board: list[State], qc: QuantumCircuit, axis: Axis) -> None:
+def rotate(game: QuantumTicTacToe, axis: Axis) -> bool:
     """Move for rotating a qubit around `axis`.
 
-
     Args:
-        board: board
-        qc: quantum circuit
+        game: game object
         axis: axis to rotate around
+
+    Returns:
+        whether the board collapsed
     """
 
-    max_n = min(2, count_empty_cells(board))
+    max_n = min(2, game.count_empty_cells(0))
 
     # get number of qubits to rotate
     n = get_int(
@@ -149,15 +120,17 @@ def rotate(board: list[State], qc: QuantumCircuit, axis: Axis) -> None:
         f"Number of qubits can be at most {max_n}.",
     )
 
-    remaining_rotation = MAX_ANGLE
+    remaining_rotation = game.max_angle
 
     used = set()
+
+    collapsed = False
 
     for _ in range(n):
         # get position
         pos = 0
         while True:
-            pos = get_valid_position(board)
+            pos = get_valid_position(game.board(0))
             if pos in used:
                 print("You already rotated this qubit.")
             else:
@@ -174,33 +147,31 @@ def rotate(board: list[State], qc: QuantumCircuit, axis: Axis) -> None:
         remaining_rotation -= abs(angle)
 
         # add rotation gate
-        match axis:
-            case Axis.X:
-                qc.rx(angle, pos)
-            case Axis.Y:
-                qc.ry(angle, pos)
-            case Axis.Z:
-                qc.rz(angle, pos)
+        collapsed = collapsed or game.rotate(0, pos, axis, angle, n)
 
         used.add(pos)
 
+    return collapsed
 
-def rotate_controlled(board: list[State], qc: QuantumCircuit, axis: Axis) -> None:
+
+def rotate_controlled(game: QuantumTicTacToe, axis: Axis) -> bool:
     """Move for controlled rotation.
 
     Args:
-        board: board
-        qc: quantum circuit
+        game: game object
         axis: axis to rotate around
+
+    Returns:
+        whether the board collapsed
     """
 
     # get control and target
     print("Choose control qubit.")
-    control = get_valid_position(board)
+    control = get_valid_position(game.board(0))
     print("Choose target qubit.")
     target = 0
     while True:
-        target = get_valid_position(board)
+        target = get_valid_position(game.board(0))
         if target == control:
             print("Target cannot be the same as control.")
         else:
@@ -208,118 +179,15 @@ def rotate_controlled(board: list[State], qc: QuantumCircuit, axis: Axis) -> Non
 
     # get angle
     angle = get_float(
-        -MAX_CONTROLLED_ANGLE,
-        MAX_CONTROLLED_ANGLE,
-        f"Enter angle to rotate by (max. {MAX_CONTROLLED_ANGLE}): ",
-        f"The angle must be between {-MAX_CONTROLLED_ANGLE} and {MAX_CONTROLLED_ANGLE}.",
+        -game.max_controlled_angle,
+        game.max_controlled_angle,
+        f"Enter angle to rotate by (max. {game.max_controlled_angle}): ",
+        f"The angle must be between {-game.max_controlled_angle} and {game.max_controlled_angle}.",
     )
 
     # add controlled rotation gate
-    match axis:
-        case Axis.X:
-            qc.crx(angle, control, target)
-        case Axis.Y:
-            qc.cry(angle, control, target)
-        case Axis.Z:
-            qc.crz(angle, control, target)
-
-
-def collapse(
-    board: list[State], qc: QuantumCircuit, backend: AerSimulator | FakeBackendV2
-) -> None:
-    """Measure the quantum circuit `qc`.
-
-    Update `board` according to the results measured.
-
-    Args:
-        board: board to update
-        qc: quantum circuit to measure
-    """
-
-    qcs = {"exist": qc.copy(), "symbol": qc.copy()}
-
-    # change basis for symbols
-    for i in range(9):
-        qcs["symbol"].h(i)
-
-    results = {}
-
-    # run circuit
-    for key, val in qcs.items():
-        val.measure_all()
-        transpiled_qc = transpile(val, backend)
-        job = backend.run(transpiled_qc, shots=1)
-        result = job.result()
-        counts = result.get_counts()
-
-        results[key] = list(counts.keys())[0]
-
-    # update board
-    for i in range(9):
-        # position already taken
-        if board[i] != State.EMPTY:
-            continue
-
-        # set symbol if measured 1 in z-basis
-        if int(results["exist"][8 - i]):
-            board[i] = State.X if int(results["symbol"][8 - i]) else State.O
-
-    print("Collapsed board.")
-
-
-def check_win(board: list[State]) -> State:
-    """Check whether someone has won.
-
-    Args:
-        board: boards to check
-
-    Returns:
-        winner of the game. `State.Draw` iff draw. `State.Empty` iff game has not ended.
-    """
-    winner = State.EMPTY
-
-    full = True
-
-    combinations = [
-        # horisontal
-        (0, 1, 2),
-        (3, 4, 5),
-        (6, 7, 8),
-        # vertrical
-        (0, 3, 6),
-        (1, 4, 7),
-        (2, 5, 8),
-        # diagonal
-        (0, 4, 8),
-        (2, 4, 6),
-    ]
-
-    for comb in combinations:
-        row = (board[comb[0]], board[comb[1]], board[comb[2]])
-
-        # check if all full
-        full = full and all(state != State.EMPTY for state in row)
-
-        current_winner = State.EMPTY
-
-        if row == (State.X, State.X, State.X):
-            current_winner = State.X
-        elif row == (State.O, State.O, State.O):
-            current_winner = State.O
-
-        if current_winner != State.EMPTY:
-            if winner == State.EMPTY:
-                winner = current_winner
-            elif winner != current_winner:
-                return State.DRAW
-
-    if winner == State.EMPTY:
-        return State.DRAW if full else State.EMPTY
-    return winner
-
-
-def count_empty_cells(board: list[State]) -> int:
-    return sum([cell == State.EMPTY for cell in board])
+    game.rotate_control(0, control)
+    return game.rotate_target(0, target, axis, angle)
 
 
 class MoveType:
@@ -335,7 +203,7 @@ class MoveType:
         self,
         description: str,
         min_empty: int,
-        move: Callable[[list[State], QuantumCircuit], bool],
+        move: Callable[[QuantumTicTacToe], bool],
     ) -> None:
         """Create a move type object.
 
@@ -358,43 +226,39 @@ class MoveType:
         return self._min_empty
 
     @property
-    def move(self) -> Callable[[list[State], QuantumCircuit], bool]:
+    def move(self) -> Callable[[QuantumTicTacToe], bool]:
         return self._move
 
 
-def main():
-    """Game loop."""
+def qtt_cli(ultimate: bool):
+    """Game loop.
+
+    Args:
+        ultimate: whether to create ultimate version
+    """
 
     # set backend
     backend = AerSimulator()
 
     # initialise move types
     move_types = {
-        "x": MoveType(
-            "rotate around x-axis", 1, lambda b, qc: bool(rotate(b, qc, Axis.X))
-        ),
-        "z": MoveType(
-            "rotate around z-axis", 1, lambda b, qc: bool(rotate(b, qc, Axis.Z))
-        ),
+        "x": MoveType("rotate around x-axis", 1, lambda game: rotate(game, Axis.X)),
+        "z": MoveType("rotate around z-axis", 1, lambda game: rotate(game, Axis.Z)),
         "cy": MoveType(
             "controlled rotation around y-axis",
             2,
-            lambda b, qc: bool(rotate_controlled(b, qc, Axis.Y)),
+            lambda game: rotate_controlled(game, Axis.Y),
         ),
-        "c": MoveType(
-            "collapse", 1, lambda b, qc: bool(collapse(b, qc, backend)) or True
-        ),
+        "c": MoveType("collapse", 1, lambda game: game.collapse()),
     }
 
     turn = State.X
-    moves = 0
     empty = 9
 
-    board = [State.EMPTY for _ in range(9)]
-    qc = QuantumCircuit(9, 9)
+    game = QuantumTicTacToe(backend, math.pi / 2, math.pi, 10, ultimate)
 
     while True:
-        print_board(board)
+        print_board(game.board(0))
         print(f"It's {turn}'s turn.")
 
         # create prompt
@@ -415,25 +279,19 @@ def main():
             else:
                 break
 
-        collapsed = move_types[move_type].move(board, qc)
-
-        moves += 1
+        collapsed = move_types[move_type].move(game)
 
         # draw circuit
         if not collapsed:
-            print(qc.draw())
-
-        # collapse when MAX_MOVES since last collapse
-        if not collapsed and moves == MAX_MOVES:
-            collapse(board, qc, backend)
-            collapsed = True
+            print(game.circuit_string())
 
         # check win if collapsed
         if collapsed:
-            winner = check_win(board)
+            print("Board collapsed")
+            winner = game.check_win(0)
             # game ended
             if winner != State.EMPTY:
-                print_board(board)
+                print_board(game.board(0))
 
                 if winner == State.DRAW:
                     print("It's a draw.")
@@ -441,20 +299,19 @@ def main():
                     print(f"{winner} has won!")
                 break
 
-            # reset circuit
-            qc = QuantumCircuit(9, 9)
-
             # get the number of empty cells
-            empty = count_empty_cells(board)
+            empty = game.count_empty_cells(0)
 
             # remove unavailable moves
             move_types = {
                 key: val for key, val in move_types.items() if empty >= val.min_empty
             }
 
-            moves = 0
-
         turn = State.X if turn == State.O else State.O
+
+
+def main():
+    qtt_cli(False)
 
 
 if __name__ == "__main__":
