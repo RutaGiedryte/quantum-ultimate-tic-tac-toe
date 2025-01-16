@@ -100,6 +100,14 @@ class QuantumTicTacToe:
 
         return self._c_board != -1
 
+    def get_control(self) -> tuple[int, int]:
+        """Get control qubit board and cell index.
+
+        Returns:
+            (board index, cell index)
+        """
+        return self._c_board, self._c_cell
+
     def has_moves(self) -> bool:
         """Check if there are moves left in a multi-move turn.
 
