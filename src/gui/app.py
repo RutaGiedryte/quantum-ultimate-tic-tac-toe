@@ -1,5 +1,5 @@
 import math
-from tkinter import N, Tk, StringVar, ttk
+from tkinter import Tk, StringVar, ttk
 from backend.quantum_tic_tac_toe import QuantumTicTacToe, State
 from gui.widgets.angle_selection import AngleSelection
 from gui.widgets.board import Board
@@ -39,11 +39,17 @@ class App:
         board_row = 1
         buttons_row = 2
 
+        bottom_row_height = 120
+
         # create main frame
         mainframe = ttk.Frame(root)
-        mainframe.grid(row=0, column=0, sticky=N)
+        mainframe.grid(row=0, column=0, sticky="NSEW")
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
+
+        mainframe.columnconfigure(0, weight=1)
+        mainframe.rowconfigure(board_row, weight=1)
+        mainframe.rowconfigure(buttons_row, minsize=bottom_row_height)
 
         # create info label
         self._info_text = StringVar()
@@ -55,11 +61,11 @@ class App:
             padding=row_padding,
             style="TopInfo.TLabel",
         )
-        info_label.grid(row=info_row, column=0, sticky=N)
+        info_label.grid(row=info_row, column=0)
 
         # create board
         self._board = Board(mainframe, width, self._click_cell, ultimate)
-        self._board.grid(row=board_row, column=0, sticky=N)
+        self._board.grid(row=board_row, column=0, sticky="NSEW")
 
         self._n_boards = 9 if ultimate else 1
 
@@ -79,13 +85,13 @@ class App:
         self._move_selection = MoveSelection(
             mainframe, self._moves, 2, padding=row_padding
         )
-        self._move_selection.grid(row=buttons_row, column=0, sticky=N)
+        self._move_selection.grid(row=buttons_row, column=0, sticky="S")
 
         # create number of qubits selection widget
         self._number_selection = NumberSelection(
             mainframe, 2, 2, self._select_number_of_qubits, padding=row_padding
         )
-        self._number_selection.grid(row=buttons_row, column=0, sticky=N)
+        self._number_selection.grid(row=buttons_row, column=0, sticky="S")
         self._number_selection.grid_forget()
 
         # create angle selection widget
@@ -93,7 +99,7 @@ class App:
         self._angle_selection = AngleSelection(
             mainframe, self._angle, self._set_rotation_angle, padding=row_padding
         )
-        self._angle_selection.grid(row=buttons_row, column=0, sticky=N)
+        self._angle_selection.grid(row=buttons_row, column=0, sticky="S")
         self._angle_selection.grid_forget()
 
         # create reset button
@@ -104,7 +110,7 @@ class App:
             width=10,
             command=self._reset,
         )
-        self._reset_button.grid(row=buttons_row, column=0, sticky=N)
+        self._reset_button.grid(row=buttons_row, column=0, sticky="S")
         self._reset_button.grid_forget()
 
     def _click_cell(self, board: int, cell: int) -> None:

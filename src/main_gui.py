@@ -6,6 +6,7 @@ def main():
     root = Tk()
     root.title("Quantum Tic-Tac-Toe")
     root.geometry("700x700")
+    root.minsize(500, 500)
 
     # quit with escape
     root.bind("<Escape>", lambda x: root.destroy())
