@@ -26,6 +26,8 @@ class Board(ttk.Frame):
         """
 
         super().__init__(parent, **kw)
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
 
         self._callback = callback
         self._ultimate = ultimate
@@ -33,8 +35,8 @@ class Board(ttk.Frame):
         self._board_width = width / 3 if ultimate else width
 
         # font
-        font = "Roboto"
-        font_size = int(self._board_width / 4)
+        self._font = "Roboto"
+        self._font_size = int(self._board_width / 4)
 
         # font colour
         self._x_color = "#CB70FF"
@@ -46,6 +48,8 @@ class Board(ttk.Frame):
         self._canvas.grid()
 
         self._width = width
+
+        self._grid_line_ids = []
 
         # create grid lines
         self._create_grid(width, 0, 0)
@@ -70,12 +74,14 @@ class Board(ttk.Frame):
                     self._index_to_pos(b, c),
                     text="",
                     fill=self._default_color,
-                    font=(font, font_size),
+                    font=(self._font, self._font_size),
                 )
                 for c in range(9)
             ]
             for b in range(9 if ultimate else 1)
         ]
+
+        self.bind("<Configure>", self._on_resize)
 
     def entangle(self, c_board: int, c_cell: int, t_board: int, t_cell: int) -> None:
         """Create arrow from control to target.
@@ -252,12 +258,20 @@ class Board(ttk.Frame):
         line_width = 0.01 * width
 
         # create vertical lines
-        self._canvas.create_line(x1, y, x1, y + width, width=line_width)
-        self._canvas.create_line(x2, y, x2, y + width, width=line_width)
+        self._grid_line_ids.append(
+            self._canvas.create_line(x1, y, x1, y + width, width=line_width)
+        )
+        self._grid_line_ids.append(
+            self._canvas.create_line(x2, y, x2, y + width, width=line_width)
+        )
 
         # create horizontal lines
-        self._canvas.create_line(x, y1, x + width, y1, width=line_width)
-        self._canvas.create_line(x, y2, x + width, y2, width=line_width)
+        self._grid_line_ids.append(
+            self._canvas.create_line(x, y1, x + width, y1, width=line_width)
+        )
+        self._grid_line_ids.append(
+            self._canvas.create_line(x, y2, x + width, y2, width=line_width)
+        )
 
     def _on_click(self, event):
         """Callback function for clicking on canvas."""
@@ -266,3 +280,47 @@ class Board(ttk.Frame):
         # call callback function if clicked cell enabled
         if self._enabled[board][cell]:
             self._callback(board, cell)
+
+    def _on_resize(self, event):
+        """Callback function for resizing window."""
+
+        width = min(event.width, event.height)
+
+        # change canvas size
+        self._canvas.config(width=width, height=width)
+
+        # calculate scale
+        scale = width / self._width
+
+        # update width variables
+        self._width = width
+        self._board_width = width / 3 if self._ultimate else width
+
+        # scale all objects on canvas
+        self._canvas.scale("all", 0, 0, scale, scale)
+
+        # scale symbols
+        self._font_size = int(self._board_width / 4)
+        font = (self._font, self._font_size)
+
+        for symbols in self._symbol_ids:
+            for id in symbols:
+                self._canvas.itemconfigure(id, font=font)
+
+        # scale entanglement line width
+        for id in self._entanglement_ids:
+            width = float(self._canvas.itemcget(id, "width")) * scale
+            arrow_shape = self._canvas.itemcget(id, "arrowshape").split()
+
+            arrow_shape = (
+                scale * float(arrow_shape[0]),
+                scale * float(arrow_shape[1]),
+                scale * float(arrow_shape[2]),
+            )
+
+            self._canvas.itemconfigure(id, width=width, arrowshape=arrow_shape)
+
+        # scale grid line width
+        for id in self._grid_line_ids:
+            width = float(self._canvas.itemcget(id, "width")) * scale
+            self._canvas.itemconfigure(id, width=width)
