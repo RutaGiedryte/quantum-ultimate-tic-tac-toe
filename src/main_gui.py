@@ -11,7 +11,7 @@ def main():
     # quit with escape
     root.bind("<Escape>", lambda x: root.destroy())
 
-    App(root, ultimate=True)
+    App(root, ultimate=False)
 
     root.mainloop()
 
