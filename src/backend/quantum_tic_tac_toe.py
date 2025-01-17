@@ -199,16 +199,6 @@ class QuantumTicTacToe:
             most_populated_string = max(counts, key=counts.get)  # We can change this to average
             results[key] = most_populated_string
 
-            print(most_populated_string)  # Debugging
-
-            # val.measure_all()
-            # transpiled_qc = transpile(val, self._backend)
-            # job = self._backend.run(transpiled_qc, shots=1)
-            # result = job.result()
-            # counts = result.get_counts()
-            #
-            # results[key] = list(counts.keys())[0]
-
         # update board
         for i in range(self._n_bits):
             board = i // 9
