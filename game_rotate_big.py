@@ -6,16 +6,16 @@ from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 from qiskit.transpiler import CouplingMap
 
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-
 ###############################################################################
 # CONSTANTS
 ###############################################################################
-MAX_ANGLE_XZ = math.pi/2       # Up to π/2 total angle across 1–2 qubits for X/Z
-MAX_ANGLE_CONTROLLED = math.pi # Up to π for controlled Y
-MAX_MOVES_BETWEEN_COLLAPSE = 10  # squares auto collapse 10 moves after first changed
-SUB_BOARD_COUNT = 9
+# Separate max angles for single-qubit Y vs. Z rotations:
+MAX_ANGLE_Y = math.pi/2       # e.g. up to π/2 for Y rotations
+MAX_ANGLE_Z = math.pi/2       # e.g. up to π/2 for Z rotations
+
+MAX_ANGLE_CONTROLLED = math.pi    # Up to π for controlled x
+
+MOVES_BETWEEN_AUTO_COLLAPSE = 10  # universal 10-move timer for auto-collapse
 
 ###############################################################################
 # FULLY CONNECTED 81-QUBIT COUPLING MAP
@@ -49,9 +49,9 @@ class State(Enum):
             case State.DRAW:  return "draw"
 
 class Axis(Enum):
-    X = 0
-    Y = 1
-    Z = 2
+    Y = 0  # single-qubit Y rotation
+    X = 1  # controlled X
+    Z = 2  # single-qubit Z rotation
 
 def resetBoard():
     """
@@ -149,58 +149,11 @@ def boardIsFull(theBoard, topBoard):
                 return False
     return True
 
-
-###############################################################################
-# PRINTING SUB-BOARD CIRCUITS
-###############################################################################
-
-def display_circuit_of_sub_board(circuit: QuantumCircuit, sub_board_number: int):
-    # save full circuit to a file
-    filename = 'circuit_state.png'
-    circuit.draw('mpl', filename=filename, initial_state=True)
-    img = mpimg.imread(filename)
-    plt.close()
-
-    img_cropped = crop_circuit_image(img, sub_board_number)
-
-    fig = plt.figure()
-    ax = fig.add_subplot()
-    ax.axis("off")
-    ax.imshow(img_cropped)
-    plt.show(block=False)
-
-
-def crop_circuit_image(img, sub_board_number: int):
-    try:
-        # check if we are visualising a valid sub-board
-        if sub_board_number < 1 or sub_board_number > SUB_BOARD_COUNT:
-            raise ValueError
-        image_height = img.shape[0]
-        
-        # slices will overlap a little bit 
-        theoretical_height = image_height/SUB_BOARD_COUNT
-        slice_height = theoretical_height * 1.5
-        slice_half_height = int(slice_height/2)
-
-        # switch from 1-9 numbered to 0-8 indexed, compute slice center
-        slice_center = int(theoretical_height * (0.5 + sub_board_number - 1))
-
-        # lower bound is the top of image, upper bound is the bottom
-        lower_bound = max(0, slice_center - slice_half_height)
-        upper_bound = min(image_height, slice_center + slice_half_height)
-
-        return img[lower_bound:upper_bound, :, :]
-
-    except ValueError:
-        print("Failed to display partial circuit")
-
-
 ###############################################################################
 # PARTIAL-ONLY COLLAPSE with ENTANGLEMENT LOOKUP
 ###############################################################################
 def partial_collapse(circuit, squaresToMeasure, theBoard, topBoard,
-                     squaresActivated, firstChangeTurn, turnCount,
-                     entangledPairs):
+                     squaresActivated, entangledPairs, zBlocked):
     """
     squaresToMeasure are the qubit indices in the sub-board being collapsed,
     plus any specifically entangled qubits (in different sub-boards).
@@ -209,6 +162,8 @@ def partial_collapse(circuit, squaresToMeasure, theBoard, topBoard,
 
     entangledPairs[q] is a set of qubits entangled with q. 
     We'll unify them into squaresToMeasure if q is in squaresToMeasure.
+
+    Also, once measured, we remove them from zBlocked.
     """
     if not squaresToMeasure:
         print("No squares to collapse.")
@@ -228,15 +183,15 @@ def partial_collapse(circuit, squaresToMeasure, theBoard, topBoard,
 
     print(f"\n--- PARTIAL COLLAPSE of squares: {squaresToMeasure} ---\n")
 
-    from copy import deepcopy
+    # copy circuit for z- and x-basis measure
     qc_z = circuit.copy()
     qc_x = circuit.copy()
 
-    for q in range(81):
-        if q in squaresToMeasure:
-            qc_z.measure(q, q)
-            qc_x.h(q)
-            qc_x.measure(q, q)
+    # measure only squaresToMeasure
+    for q in squaresToMeasure:
+        qc_z.measure(q, q)
+        qc_x.h(q)
+        qc_x.measure(q, q)
 
     fc_map = fully_connected_81_coupling()
     simulator = AerSimulator(method='matrix_product_state')
@@ -263,7 +218,9 @@ def partial_collapse(circuit, squaresToMeasure, theBoard, topBoard,
         if theBoard[sbID][cID] != ' ':
             continue
 
+        # z==1 => there is a symbol; z==0 => remain empty
         if z_str[q]=='1':
+            # x==1 => 'X', x==0 => 'O'
             if x_str[q]=='1':
                 theBoard[sbID][cID] = 'X'
             else:
@@ -274,8 +231,10 @@ def partial_collapse(circuit, squaresToMeasure, theBoard, topBoard,
         # remove from squaresActivated
         if q in squaresActivated:
             squaresActivated.remove(q)
-        if q in firstChangeTurn:
-            del firstChangeTurn[q]
+
+        # remove from zBlocked if present
+        if q in zBlocked:
+            zBlocked.remove(q)
 
     # reset them in the main circuit
     for q in squaresToMeasure:
@@ -302,23 +261,25 @@ def main():
     theBoard, topBoard = resetBoard()
     circuit = QuantumCircuit(81,81)
 
-    # squares that are "activated" from |0>, not collapsed yet
-    squaresActivated = set()
-    # track the turn index when a qubit was first changed
-    firstChangeTurn = {}
-    # track entanglement pairs => for each qubit q, a set of qubits eq that are directly entangled
-    entangledPairs = {q: set() for q in range(81)}
+    squaresActivated = set()            # squares that are "activated" from |0>, not collapsed yet
+    entangledPairs = {q: set() for q in range(81)}  # direct entanglements
+    zBlocked = set()                    # track qubits that cannot do z-rotation (controlled x used)
 
-    forcedBoards = set()  # sub-boards forced for next move
+    forcedBoards = set()  
     turn_symbol = 'X'
-    turnCount = 0
 
-    def auto_collapse_ten():
-        due = [q for q in squaresActivated if (turnCount - firstChangeTurn[q])>= MAX_MOVES_BETWEEN_COLLAPSE]
-        if due:
-            partial_collapse(circuit, set(due), theBoard, topBoard,
-                             squaresActivated, firstChangeTurn, turnCount,
-                             entangledPairs)
+    # A single universal counter for "moves since last collapse"
+    movesSinceLastCollapse = 0
+
+    def auto_collapse_if_10():
+        nonlocal movesSinceLastCollapse
+        if movesSinceLastCollapse >= MOVES_BETWEEN_AUTO_COLLAPSE:
+            # collapse all squares in squaresActivated
+            partial_collapse(circuit, set(squaresActivated),
+                             theBoard, topBoard,
+                             squaresActivated, entangledPairs, zBlocked)
+            # then reset the counter
+            movesSinceLastCollapse = 0
 
     while True:
         printBoard(theBoard, topBoard, forcedBoards)
@@ -330,22 +291,23 @@ def main():
             print("\nAll sub-boards are decided or full => It's a tie!")
             break
 
-        print(f"\nIt's {turn_symbol}'s turn. TurnCount={turnCount}")
+        print(f"\nIt's {turn_symbol}'s turn. MovesSinceLastCollapse={movesSinceLastCollapse}")
 
-        auto_collapse_ten()
+        # check auto collapse if 10 moves since last collapse
+        auto_collapse_if_10()
 
-        print("1) x/z rotation, up to pi/2 total angle (1 or 2 squares)")
-        print("2) controlled y up to pi (1 control, 1 target)")
+        print("1) y/z rotation, up to pi/2 total angle (1 or 2 squares)")
+        print("2) controlled x up to pi (1 control, 1 target)")
         print("3) collapse sub-board")
         print("4) quit")
         choice = input("> ")
-
+        
         if choice=='4':
             print("Quit.")
             break
 
         elif choice=='3':
-            # collapse sub-board => measure partial
+            # manual collapse => measure partial
             if forcedBoards:
                 pass
             else:
@@ -357,19 +319,22 @@ def main():
                 if q in squaresActivated:
                     toMeasure.add(q)
 
-            partial_collapse(circuit, toMeasure, theBoard, topBoard,
-                             squaresActivated, firstChangeTurn, turnCount,
-                             entangledPairs)
+            partial_collapse(circuit, toMeasure,
+                             theBoard, topBoard,
+                             squaresActivated, entangledPairs, zBlocked)
             print(circuit.draw())
             forcedBoards.clear()
-            turnCount += 1
+
+            # RESET movesSinceLastCollapse => 0
+            movesSinceLastCollapse = 0
+
             turn_symbol = 'O' if turn_symbol=='X' else 'X'
             continue
 
         elif choice=='1':
-            # x/z rotation up to pi/2 total angle
-            axis_ = input("Rotate around x or z? (x/z) ")
-            if axis_ not in ['x','z']:
+            # y/z rotation up to pi/2 total angle
+            axis_ = input("Rotate around y or z? (y/z) ")
+            if axis_ not in ['y','z']:
                 print("Invalid axis.")
                 continue
 
@@ -379,11 +344,17 @@ def main():
                 continue
             n_squares = int(n_squares)
 
-            angle_left = MAX_ANGLE_XZ  # pi/2 total
+            # pick the correct max angle based on axis
+            angle_limit = 0.0
+            if axis_ == 'y':
+                angle_limit = MAX_ANGLE_Y
+            else:
+                angle_limit = MAX_ANGLE_Z
+
+            angle_left = angle_limit  # we can distribute this across 1 or 2 squares
             squares_done = []
 
             for _ in range(n_squares):
-                # pick sub-board
                 while True:
                     sb = input("Which sub-board? ")
                     # if forced, must pick from it unless it's full/won
@@ -399,87 +370,121 @@ def main():
                         continue
                     break
 
-                c_ = input("Which cell [1..9]? ")
-                pos = (int(sb)-1)*9 + (int(c_)-1)
+                # re-ask for a cell until valid (and not blocked if z):
+                cell_ok = False
+                pos = None
+                while not cell_ok:
+                    c_ = input("Which cell [1..9]? ")
+                    posC = (int(sb)-1)*9 + (int(c_)-1)
 
-                # we keep re-asking for an angle if it's invalid
+                    if axis_=='z' and posC in zBlocked:
+                        print(f"Qubit {posC} is blocked from z-rotations. Please choose another cell.")
+                        continue
+                    else:
+                        # good cell
+                        pos = posC
+                        cell_ok = True
+
+                # re-ask for angle if invalid
                 angle_ok = False
+                a = 0.0
                 while not angle_ok:
-                    a = float(input(f"Angle in [-{angle_left}, {angle_left}]? "))
-                    if abs(a) > angle_left:
+                    a_ = float(input(f"Angle in [-{angle_left}, {angle_left}]? "))
+                    if abs(a_) > angle_left:
                         print(f"Angle too large, left= {angle_left}. Try again.")
                         continue
-                    # if valid
                     angle_ok = True
-
+                    a = a_
+            
                 # apply gate
-                if axis_=='x':
-                    circuit.rx(a, pos)
+                if axis_=='y':
+                    circuit.ry(a, pos)
                 else:
                     circuit.rz(a, pos)
                 print(circuit.draw())
 
                 if pos not in squaresActivated:
                     squaresActivated.add(pos)
-                    firstChangeTurn[pos] = turnCount
 
                 angle_left -= abs(a)
                 squares_done.append((sb, c_))
 
             forcedBoards.clear()
-            for (sb,c_) in squares_done:
+            for (sb, c_) in squares_done:
                 forcedBoards.add(c_)
 
-            turnCount += 1
+            # after a successful move => increment movesSinceLastCollapse
+            movesSinceLastCollapse += 1
+
             turn_symbol = 'O' if turn_symbol=='X' else 'X'
             continue
 
         elif choice=='2':
-            # controlled y up to pi
-            print("Control sub-board: ")
-            sbC = input()
-            print("Control cell: ")
-            cC = input()
+            # controlled x up to pi
+            while True:
+                sbC = input("Control sub-board? ")
+                if forcedBoards and sbC not in forcedBoards:
+                    if subBoardIsFull(theBoard, sbC) or subBoardIsWon(topBoard, sbC):
+                        print("Forced is full/won => free choice now.")
+                        break
+                    else:
+                        print(f"Must pick from forced boards: {forcedBoards}")
+                        continue
+                if sbC not in [str(i) for i in range(1,10)]:
+                    print("Invalid sub-board.")
+                    continue
+                break
+
+            cC = input("Control cell [1..9]? ")
             posC = (int(sbC)-1)*9 + (int(cC)-1)
 
-            print("Target sub-board: ")
-            sbT = input()
-            print("Target cell: ")
-            cT = input()
+            while True:
+                sbT = input("Target sub-board? ")
+                if forcedBoards and sbT not in forcedBoards:
+                    if subBoardIsFull(theBoard, sbT) or subBoardIsWon(topBoard, sbT):
+                        print("Forced is full/won => free choice now.")
+                        break
+                    else:
+                        print(f"Must pick from forced boards: {forcedBoards}")
+                        continue
+                if sbT not in [str(i) for i in range(1,10)]:
+                    print("Invalid sub-board.")
+                    continue
+                break
+
+            cT = input("Target cell [1..9]? ")
             posT = (int(sbT)-1)*9 + (int(cT)-1)
 
             angle = float(input(f"Angle in [-{MAX_ANGLE_CONTROLLED}, {MAX_ANGLE_CONTROLLED}]? "))
             if abs(angle)>MAX_ANGLE_CONTROLLED:
                 print("Angle too big.")
                 continue
-
-            circuit.cry(angle, posC, posT)
+    
+            circuit.crx(angle, posC, posT)
             print(circuit.draw())
-            # Mark squares as activated if not already
+
             if posC not in squaresActivated:
                 squaresActivated.add(posC)
-                firstChangeTurn[posC] = turnCount
             if posT not in squaresActivated:
                 squaresActivated.add(posT)
-                firstChangeTurn[posT] = turnCount
-
-            # Also mark them as entangled
-            from copy import deepcopy
-            entangledPairs[posC].add(posT)
-            entangledPairs[posT].add(posC)
 
             forcedBoards.clear()
             forcedBoards.add(cC)
             forcedBoards.add(cT)
 
-            turnCount += 1
+            # block z-rotation on these qubits until measured
+            zBlocked.add(posC)
+            zBlocked.add(posT)
+
+            # after a successful move => increment movesSinceLastCollapse
+            movesSinceLastCollapse += 1
+
             turn_symbol = 'O' if turn_symbol=='X' else 'X'
             continue
 
         else:
             print("Invalid choice.")
             continue
-
 
 if __name__=="__main__":
     main()
