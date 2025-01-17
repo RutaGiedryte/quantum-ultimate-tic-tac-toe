@@ -23,9 +23,6 @@ class App:
 
         # style
         style = ttk.Style()
-        style.configure("Cell.TButton", font=("Roboto", 80))
-        style.map("X.Cell.TButton", foreground=[("disabled", "#CB70FF")])
-        style.map("O.Cell.TButton", foreground=[("disabled", "#44BC68")])
         style.configure("TopInfo.TLabel", font=("Roboto", 20))
 
         # create game
@@ -60,20 +57,11 @@ class App:
         )
         info_label.grid(row=info_row, column=0, sticky=N)
 
-        # create board frame
-        boardframe = ttk.Frame(mainframe, padding=row_padding)
-        boardframe.grid(row=board_row, column=0, sticky=N)
+        # create board
+        self._board = Board(mainframe, width, self._click_cell, ultimate)
+        self._board.grid(row=board_row, column=0, sticky=N)
 
-        board_width = width // 3 if ultimate else width
-        n_boards = 9 if ultimate else 1
-
-        # create boards
-        self._boards = [
-            Board(boardframe, board_width, lambda c, b=i: self._click_cell(b, c))
-            for i in range(n_boards)
-        ]
-        for i in range(n_boards):
-            self._boards[i].grid(row=i // 3, column=i % 3)
+        self._n_boards = 9 if ultimate else 1
 
         # moves
         self._moves = {
@@ -129,7 +117,7 @@ class App:
 
         collapsed = False
 
-        self._boards[board].touch_cell(cell)
+        self._board.touch_cell(board, cell)
 
         self._disable_boards()
 
@@ -152,6 +140,8 @@ class App:
             case Move.CRY:
                 # control qubit has been selected - add gate
                 if self._game.has_control():
+                    c_board, c_cell = self._game.get_control()
+                    self._board.entangle(c_board, c_cell, board, cell)
                     collapsed = self._game.rotate_target(
                         board, cell, Axis.Y, float(self._angle.get())
                     )
@@ -304,22 +294,21 @@ class App:
         # get board to enable
         boards = self._game.available_boards()
         # enable cells
-        for b in boards:
-            cells = self._game.available_cells(b)
-            self._boards[b].enable(cells)
+        for board in boards:
+            self._board.enable(board, self._game.available_cells(board))
 
     def _disable_boards(self) -> None:
         """Disable all boards."""
 
-        for board in self._boards:
-            board.disable()
+        for i in range(self._n_boards):
+            self._board.disable(i)
 
     def _update_boards(self) -> None:
         """Update all boards."""
 
-        for i, board in enumerate(self._boards):
+        for i in range(self._n_boards):
             board_state = self._game.board(i)
-            board.update_display(board_state)
+            self._board.update_display(i, board_state)
 
     def _change_turn(self) -> None:
         """Change turn."""
@@ -378,9 +367,8 @@ class App:
         # reset game
         self._game.reset()
 
-        # reset boards
-        for board in self._boards:
-            board.reset()
+        # reset board
+        self._board.reset()
 
         # hide again button
         self._reset_button.grid_forget()
