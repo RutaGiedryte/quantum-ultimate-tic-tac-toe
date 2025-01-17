@@ -1,6 +1,8 @@
-from qiskit_aer import AerSimulator
 from collections.abc import Callable
 import math
+
+from qiskit_ibm_runtime import QiskitRuntimeService
+from qiskit_ibm_runtime.fake_provider import FakeSherbrooke
 
 from backend.quantum_tic_tac_toe import Axis, QuantumTicTacToe, State
 
@@ -230,15 +232,19 @@ class MoveType:
         return self._move
 
 
-def qttt_cli(ultimate: bool):
+def qttt_cli(ultimate: bool, service=None):
     """Game loop.
 
     Args:
         ultimate: whether to create ultimate version
+        service: What backend to use
     """
 
     # set backend
-    backend = AerSimulator()
+    if service:
+        backend = service.least_busy(simulator=False, operational=True, min_num_qubits=81 if ultimate else 9)
+    else:
+        backend = FakeSherbrooke()
 
     # initialise move types
     move_types = {
@@ -311,7 +317,9 @@ def qttt_cli(ultimate: bool):
 
 
 def main():
-    qttt_cli(False)
+    service = None
+    # service = QiskitRuntimeService()
+    qttt_cli(False, service=service)
 
 
 if __name__ == "__main__":

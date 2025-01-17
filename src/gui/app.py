@@ -1,18 +1,18 @@
 import math
-from tkinter import Tk, StringVar, ttk
+from tkinter import N, Tk, StringVar, ttk
+from qiskit_ibm_runtime.fake_provider import FakeSherbrooke
 from backend.quantum_tic_tac_toe import QuantumTicTacToe, State
 from gui.widgets.angle_selection import AngleSelection
 from gui.widgets.board import Board
 from backend.quantum_tic_tac_toe import Axis
 from gui.widgets.move_selection import Move, MoveInfo, MoveSelection
 from gui.widgets.number_selection import NumberSelection
-from qiskit_aer import AerSimulator
 
 
 class App:
     """Main application."""
 
-    def __init__(self, root: Tk, ultimate: bool, width: int = 500) -> None:
+    def __init__(self, root: Tk, ultimate: bool, width: int = 500, service=None) -> None:
         """Create application.
 
         Args:
@@ -25,10 +25,14 @@ class App:
         style = ttk.Style()
         style.configure("TopInfo.TLabel", font=("Roboto", 20))
 
+        backend = None
+        if service:
+            backend = service.least_busy(simulator=False, operational=True, min_num_qubits=81 if ultimate else 9)
+        else:
+            backend = FakeSherbrooke()
+
         # create game
-        self._game = QuantumTicTacToe(
-            AerSimulator(), math.pi / 2, math.pi, 10, ultimate
-        )
+        self._game = QuantumTicTacToe(backend, math.pi / 2, math.pi, 10, ultimate)
         self._turn = State.X
 
         # vertical padding for elements

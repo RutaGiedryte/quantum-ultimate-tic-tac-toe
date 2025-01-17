@@ -1,4 +1,7 @@
 from tkinter import Tk
+
+from qiskit_ibm_runtime import QiskitRuntimeService
+
 from gui.app import App
 
 
@@ -11,7 +14,9 @@ def main():
     # quit with escape
     root.bind("<Escape>", lambda x: root.destroy())
 
-    App(root, ultimate=False)
+    service = None
+    # service = QiskitRuntimeService()
+    App(root, ultimate=False, service=service)
 
     root.mainloop()
 
