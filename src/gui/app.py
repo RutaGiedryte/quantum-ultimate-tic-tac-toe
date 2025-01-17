@@ -28,24 +28,14 @@ class App:
         style = ttk.Style()
         style.configure("TopInfo.TLabel", font=("Roboto", 20))
 
+        backend = None
         if service:
-            self._game = QuantumTicTacToe(
-                service.least_busy(
-                    simulator=False,
-                    operational=True,
-                    min_num_qubits=81 if ultimate else 9),
-                math.pi / 2,
-                math.pi,
-                10,
-                ultimate
-            )
+            backend = service.least_busy(simulator=False,operational=True,min_num_qubits=81 if ultimate else 9)
         else:
-            self._game = QuantumTicTacToe(
-                FakeSherbrooke(), math.pi / 2, math.pi, 10, ultimate
-            )
+            backend = FakeSherbrooke()
 
         # create game
-
+        self._game = (backend, math.pi / 2, math.pi, 10, ultimate)
         self._turn = State.X
 
         # vertical padding for elements
