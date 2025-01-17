@@ -1,5 +1,7 @@
 from enum import Enum
-from qiskit import QuantumCircuit, transpile
+from qiskit import QuantumCircuit, transpile, generate_preset_pass_manager
+from qiskit.providers import BackendV2
+from qiskit_ibm_runtime import SamplerV2
 from qiskit_ibm_runtime.fake_provider.fake_backend import FakeBackendV2
 from qiskit_aer import AerSimulator
 
@@ -37,7 +39,7 @@ class QuantumTicTacToe:
 
     def __init__(
         self,
-        backend: AerSimulator | FakeBackendV2,
+        backend: BackendV2,
         max_angle: float,
         max_controlled_angle: float,
         max_turns: int,
@@ -56,7 +58,7 @@ class QuantumTicTacToe:
         self._ultimate = ultimate
         self._n_bits = 81 if ultimate else 9
 
-        self._qc = QuantumCircuit(self._n_bits, self._n_bits)
+        self._qc = QuantumCircuit(self._n_bits)
 
         self._backend = backend
         self._max_angle = max_angle
@@ -183,12 +185,29 @@ class QuantumTicTacToe:
         # run circuit
         for key, val in qcs.items():
             val.measure_all()
-            transpiled_qc = transpile(val, self._backend)
-            job = self._backend.run(transpiled_qc, shots=1)
+            pm = generate_preset_pass_manager(backend=self._backend, optimization_level=1)
+            isa_circuit = pm.run(val)
+            sampler = SamplerV2(mode=self._backend)
+            job = sampler.run([isa_circuit], shots=1024)
             result = job.result()
-            counts = result.get_counts()
 
-            results[key] = list(counts.keys())[0]
+            try:
+                counts = getattr(result[0].data, val.cregs[0].name, None).get_counts()
+            except AttributeError:
+                raise SystemError("Empty or invalid result..")  # What after this?
+
+            most_populated_string = max(counts, key=counts.get)  # We can change this to average
+            results[key] = most_populated_string
+
+            print(most_populated_string)  # Debugging
+
+            # val.measure_all()
+            # transpiled_qc = transpile(val, self._backend)
+            # job = self._backend.run(transpiled_qc, shots=1)
+            # result = job.result()
+            # counts = result.get_counts()
+            #
+            # results[key] = list(counts.keys())[0]
 
         # update board
         for i in range(self._n_bits):
@@ -206,7 +225,7 @@ class QuantumTicTacToe:
                 )
 
         # reset cirquit
-        self._qc = QuantumCircuit(self._n_bits, self._n_bits)
+        self._qc = QuantumCircuit(self._n_bits)
 
         self._turns = 0
         self._touched = [set() for _ in self._boards]
