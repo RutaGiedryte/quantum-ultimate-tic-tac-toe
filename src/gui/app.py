@@ -9,7 +9,6 @@ from gui.widgets.board import Board
 from backend.quantum_tic_tac_toe import Axis
 from gui.widgets.move_selection import Move, MoveInfo, MoveSelection
 from gui.widgets.number_selection import NumberSelection
-from qiskit_aer import AerSimulator
 
 
 class App:
@@ -30,12 +29,12 @@ class App:
 
         backend = None
         if service:
-            backend = service.least_busy(simulator=False,operational=True,min_num_qubits=81 if ultimate else 9)
+            backend = service.least_busy(simulator=False, operational=True, min_num_qubits=81 if ultimate else 9)
         else:
             backend = FakeSherbrooke()
 
         # create game
-        self._game = (backend, math.pi / 2, math.pi, 10, ultimate)
+        self._game = QuantumTicTacToe(backend, math.pi / 2, math.pi, 10, ultimate)
         self._turn = State.X
 
         # vertical padding for elements

@@ -1,9 +1,7 @@
 from enum import Enum
-from qiskit import QuantumCircuit, transpile, generate_preset_pass_manager
+from qiskit import QuantumCircuit, generate_preset_pass_manager
 from qiskit.providers import BackendV2
 from qiskit_ibm_runtime import SamplerV2
-from qiskit_ibm_runtime.fake_provider.fake_backend import FakeBackendV2
-from qiskit_aer import AerSimulator
 
 
 class State(Enum):

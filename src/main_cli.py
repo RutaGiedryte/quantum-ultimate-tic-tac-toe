@@ -1,4 +1,3 @@
-from qiskit_aer import AerSimulator
 from collections.abc import Callable
 import math
 
@@ -317,13 +316,11 @@ def qttt_cli(ultimate: bool, service=None):
         turn = State.X if turn == State.O else State.O
 
 
-def main(service=None):
+def main():
+    service = None
+    # service = QiskitRuntimeService()
     qttt_cli(False, service=service)
 
 
 if __name__ == "__main__":
-    simulate = True
-    if simulate:
-        main()
-    else:
-        main(QiskitRuntimeService())
+    main()

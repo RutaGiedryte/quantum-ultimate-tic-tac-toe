@@ -5,7 +5,7 @@ from qiskit_ibm_runtime import QiskitRuntimeService
 from gui.app import App
 
 
-def main(service=None):
+def main():
     root = Tk()
     root.title("Quantum Tic-Tac-Toe")
     root.geometry("700x700")
@@ -13,14 +13,12 @@ def main(service=None):
     # quit with escape
     root.bind("<Escape>", lambda x: root.destroy())
 
+    service = None
+    # service = QiskitRuntimeService()
     App(root, ultimate=False, service=service)
 
     root.mainloop()
 
 
 if __name__ == "__main__":
-    simulate = True
-    if simulate:
-        main()
-    else:
-        main(QiskitRuntimeService())
+    main()
