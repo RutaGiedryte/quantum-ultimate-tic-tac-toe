@@ -2,6 +2,83 @@ from enum import Enum
 from qiskit import QuantumCircuit, generate_preset_pass_manager
 from qiskit.providers import BackendV2
 from qiskit_ibm_runtime import SamplerV2
+from typing import Any
+
+
+class Axis(Enum):
+    """Rotation axis."""
+
+    X = 0
+    Y = 1
+    Z = 2
+
+
+class Move(Enum):
+    """Possible moves."""
+
+    RX = "x", "x-rotation", 1
+    RY = "y", "y-rotation", 1
+    RZ = "z", "z-rotation", 1
+    CRX = "cx", "controlled x-rotation", 2
+    CRY = "cy", "controlled y-rotation", 2
+    CRZ = "cz", "controlled z-rotation", 2
+    COLLAPSE = "c", "collapse", 1
+
+    def __init__(self, key: str, description: str, min_empty: int) -> None:
+        """Construct move.
+
+        Args:
+            key: short identifier for the move
+            description: move description
+            min_empty: min. number of empty cells required for the movec
+        """
+
+        self._key = key
+        self._description = description
+        self._min_empty = min_empty
+
+    @property
+    def key(self):
+        return self._key
+
+    @property
+    def description(self):
+        return self._description
+
+    @property
+    def min_empty(self):
+        return self._min_empty
+
+    def get_axis(self) -> Axis:
+        """Get the rotation axis of the move.
+
+        Returns:
+            rotation axis iff rotation move
+
+        Raises:
+            ValueError: if not a rotation move
+        """
+
+        match self:
+            case Move.RX | Move.CRX:
+                return Axis.X
+            case Move.RY | Move.CRY:
+                return Axis.Y
+            case Move.RZ | Move.CRZ:
+                return Axis.Z
+            case Move.COLLAPSE:
+                raise ValueError
+
+    def __eq__(self, other: Any) -> bool:
+        """Check equality based on `key`."""
+
+        if type(self) is not type(other):
+            return False
+
+        return self._key == other._key
+
+    def __hash__(self) -> int:
+        return hash(self._key)
 
 
 class State(Enum):
@@ -11,6 +88,7 @@ class State(Enum):
     X = 1
     O = 2
     DRAW = 3
+    Z_BLOCKED = 4
 
     def __str__(self) -> str:
         match self:
@@ -22,14 +100,8 @@ class State(Enum):
                 return "O"
             case State.DRAW:
                 return "draw"
-
-
-class Axis(Enum):
-    """Rotation axis."""
-
-    X = 0
-    Y = 1
-    Z = 2
+            case State.Z_BLOCKED:
+                return "z"
 
 
 class QuantumTicTacToe:
@@ -116,42 +188,78 @@ class QuantumTicTacToe:
         """
         return self._moves_left_in_turn != 0
 
-    def available_boards(self) -> list[int]:
-        """Get a list of indices of boards that can be used this turn.
+    def available_boards(self, move: Move) -> list[int]:
+        """Get a list of indices of boards that can be used with `move`.
+
+        Args:
+            move: move to check
 
         Returns:
-            list of board indices that can be used
+            list of board indices that can be used with `move`
         """
+
+        if self.count_avialable_cells(0, move) == 0:
+            return []
 
         return [0]
 
-    def available_cells(self, board: int) -> list[int]:
-        """Get the indices of available cells on board `board`.
+    def available_cells(self, board: int, move: Move) -> list[int]:
+        """Get the indices of available cells on board `board` for `move`.
 
         Args:
             board: board index
+            move: move to check
 
         Returns:
             list of available cells on board `board`
         """
 
+        allowed = [State.EMPTY]
+        # allow z_blocked cells if move is not z-rotation
+        if move != Move.RZ:
+            allowed.append(State.Z_BLOCKED)
+
         return [
             i
             for i, state in enumerate(self._boards[board])
-            if state == State.EMPTY and i not in self._touched[board]
+            if state in allowed and i not in self._touched[board]
         ]
 
-    def count_empty_cells(self, board: int) -> int:
-        """Get the number of empty cells on board `board`.
+    def available_moves(self, moves: list[Move]) -> list[Move]:
+        """Filter available moves from a list of moves.
+
+        Args:
+            moves: list of moves to filter
+
+        Returns
+            available moves
+        """
+
+        allowed = []
+
+        for move in moves:
+            available_boards = self.available_boards(move)
+            n_empty = sum(
+                [self.count_avialable_cells(board, move) for board in available_boards]
+            )
+
+            if n_empty >= move.min_empty:
+                allowed.append(move)
+
+        return allowed
+
+    def count_avialable_cells(self, board: int, move: Move) -> int:
+        """Get the number of available cells on board `board` for `move`.
 
         Args:
             board: board index
+            move: move to check
 
         Returns:
-            number of empty cells on board `board`
+            number of empty cells on board `board` for `move`
         """
 
-        return sum([cell == State.EMPTY for cell in self._boards[board]])
+        return len(self.available_cells(board, move))
 
     def board(self, i: int) -> list[State]:
         """Get the board at index `i`.
@@ -183,18 +291,20 @@ class QuantumTicTacToe:
         # run circuit
         for key, val in qcs.items():
             val.measure_all()
-            pm = generate_preset_pass_manager(backend=self._backend, optimization_level=1)
+            pm = generate_preset_pass_manager(
+                backend=self._backend, optimization_level=1
+            )
             isa_circuit = pm.run(val)
             sampler = SamplerV2(mode=self._backend)
-            job = sampler.run([isa_circuit], shots=1024)
+            job = sampler.run([isa_circuit], shots=1)
             result = job.result()
 
             try:
-                counts = getattr(result[0].data, val.cregs[0].name, None).get_counts()
+                counts = getattr(result[0].data, val.cregs[0].name, None).get_counts()  # type: ignore
             except AttributeError:
                 raise SystemError("Empty or invalid result..")  # What after this?
 
-            most_populated_string = max(counts, key=counts.get)  # We can change this to average
+            most_populated_string = max(counts, key=counts.get)
             results[key] = most_populated_string
 
         # update board
@@ -203,8 +313,12 @@ class QuantumTicTacToe:
             cell = i % 9
 
             # position already taken
-            if self._boards[board][cell] != State.EMPTY:
+            if self._boards[board][cell] in [State.X, State.O]:
                 continue
+
+            # unblock z-rotation
+            if self._boards[board][cell] == State.Z_BLOCKED:
+                self._boards[board][cell] = State.EMPTY
 
             # set symbol if measured 1 in z-basis
             if int(results["exist"][self._n_bits - 1 - i]):
@@ -260,7 +374,13 @@ class QuantumTicTacToe:
         assert cell < 9, "Invalid cell index"
         assert abs(angle) <= self._max_angle, "Angle too large"
         assert n > 0, "Number of qubits must be at least 1"
-        assert self._boards[board][cell] == State.EMPTY, "Cannot rotate non-empty cell"
+        assert self._boards[board][cell] not in [State.X, State.O], (
+            "Cannot rotate non-empty cell"
+        )
+        if axis == Axis.Z:
+            assert self._boards[board][cell] != State.Z_BLOCKED, (
+                "Cannot z-rotate z-blocked cell"
+            )
 
         qubit = board * 9 + cell
         match axis:
@@ -292,7 +412,7 @@ class QuantumTicTacToe:
 
         assert board < len(self._boards), "Invalid board index"
         assert cell < 9, "Invalid cell index"
-        assert self._boards[board][cell] == State.EMPTY, "Cell is not empty"
+        assert self._boards[board][cell] not in [State.X, State.O], "Cell is not empty"
 
         self._c_board = board
         self._c_cell = cell
@@ -302,8 +422,8 @@ class QuantumTicTacToe:
 
     def rotate_target(
         self,
-        t_board: int,
-        t_cell: int,
+        board: int,
+        cell: int,
         axis: Axis,
         angle: float,
     ) -> bool:
@@ -312,8 +432,8 @@ class QuantumTicTacToe:
         The control qubit has to be set (`rotate_control`) before calling this function. If it has been `max_moves` since the last collapse, the board collapses.
 
         Args:
-            t_board: target board index
-            t_cell: target cell index
+            board: target board index
+            cell: target cell index
             axis: axis to rotate around
             angle: angle to rotate by
 
@@ -325,10 +445,11 @@ class QuantumTicTacToe:
             "Control qubit has not been selected"
         )
         assert angle < self._max_controlled_angle, "Angle too large"
-        assert self._boards[t_board][t_cell] == State.EMPTY, "Target qubit is not empty"
+        assert self._boards[board][cell] not in [State.X, State.O], "Cell is not empty"
 
         c_qubit = self._c_board * 9 + self._c_cell
-        t_qubit = t_board * 9 + t_cell
+        t_qubit = board * 9 + cell
+
         match axis:
             case Axis.X:
                 self._qc.crx(angle, c_qubit, t_qubit)
@@ -342,6 +463,9 @@ class QuantumTicTacToe:
         self._c_cell = -1
 
         self._moves_left_in_turn = 0
+
+        # block z-rotation
+        self._boards[board][cell] = State.Z_BLOCKED
 
         return self._increase_turns()
 
