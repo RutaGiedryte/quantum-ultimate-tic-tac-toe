@@ -288,8 +288,8 @@ def main():
             simulator=False, operational=True, min_num_qubits=81 if ultimate else 9
         )
     else:
-        backend = FakeSherbrooke()
-        # backend = AerSimulator() # use non-noisy simulation
+        # backend = FakeSherbrooke()
+        backend = AerSimulator() # use non-noisy simulation
 
     qttt_cli(ultimate, moves, backend)
 
