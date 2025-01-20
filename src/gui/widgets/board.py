@@ -1,5 +1,7 @@
 from tkinter import Widget, ttk, Canvas
 from collections.abc import Callable
+from PIL import Image, ImageTk
+from qiskit.visualization import plot_bloch_vector
 
 from backend.quantum_tic_tac_toe import State
 
@@ -67,19 +69,40 @@ class Board(ttk.Frame):
         # list of entanglement lines
         self._entanglement_ids = []
 
-        # list of symbol ids
+        #Make the image of a standard bloch sphere
+        plot_bloch_vector([1, 0, 0], coord_type='spherical').savefig(r'src\Images\Bloch_0.png', transparent=True)
+        img = ImageTk.PhotoImage(Image.open(f'src\\Images\\Bloch_0.png').resize((width//3, width//3), Image.LANCZOS))
+        
         self._symbol_ids = [
             [
-                self._canvas.create_text(
+                self._canvas.create_image(
                     self._index_to_pos(b, c),
-                    text="",
-                    fill=self._default_color,
-                    font=(self._font, self._font_size),
+                    anchor = "center",
+                    image = img
                 )
                 for c in range(9)
             ]
             for b in range(9 if ultimate else 1)
         ]
+
+        # lower the tag so the images don't get in the way of clicking on the canvas
+        for list in self._symbol_ids:
+            for id in list:
+                self._canvas.tag_lower(id)
+
+        # # list of symbol ids
+        # self._symbol_ids = [
+        #     [
+        #         self._canvas.create_text(
+        #             self._index_to_pos(b, c),
+        #             text="",
+        #             fill=self._default_color,
+        #             font=(self._font, self._font_size),
+        #         )
+        #         for c in range(9)
+        #     ]
+        #     for b in range(9 if ultimate else 1)
+        # ]
 
         self.bind("<Configure>", self._on_resize)
 
@@ -142,7 +165,13 @@ class Board(ttk.Frame):
         # clear symbols
         for symbols in self._symbol_ids:
             for symbol in symbols:
-                self._canvas.itemconfigure(symbol, text="", fill=self._default_color)
+                self._canvas.itemconfigure(symbol, image=
+                    ImageTk.PhotoImage(Image.open(f'src\\Images\\debug.png').resize((500//3, 500//3), Image.LANCZOS)))
+
+        # # clear symbols
+        # for symbols in self._symbol_ids:
+        #     for symbol in symbols:
+        #         self._canvas.itemconfigure(symbol, text="", fill=self._default_color)
 
         # delete lines
         self._canvas.delete(*self._entanglement_ids)
@@ -160,15 +189,46 @@ class Board(ttk.Frame):
 
         self.reset()
 
+        print("SRS-2: update_display")
+
         for i in range(9):
-            color = self._default_color
+            # color = self._default_color
             if states[i] == State.X:
-                color = self._x_color
+
+                try:
+                    img_path = 'src\\Images\\X.png'  # Ensure the path is correct
+                    img = Image.open(img_path).resize((500 // 3, 500 // 3), Image.LANCZOS)
+                    tk_img = ImageTk.PhotoImage(img)
+                except FileNotFoundError:
+                    print(f"Image not found at {img_path}. Please check the path.")
+                    return
+                self._canvas.itemconfigure(
+                self._symbol_ids[board][i], image = tk_img)
+
             if states[i] == State.O:
-                color = self._o_color
-            self._canvas.itemconfigure(
-                self._symbol_ids[board][i], text=states[i], fill=color
-            )
+                try:
+                    img_path = 'src\\Images\\O.png'  # Ensure the path is correct
+                    img = Image.open(img_path).resize((500 // 3, 500 // 3), Image.LANCZOS)
+                    tk_img = ImageTk.PhotoImage(img)
+                except FileNotFoundError:
+                    print(f"Image not found at {img_path}. Please check the path.")
+                    return
+                self._canvas.itemconfigure(
+                self._symbol_ids[board][i], image = tk_img)
+            else:
+                self._canvas.itemconfigure(
+                self._symbol_ids[board][i], image = 
+                ImageTk.PhotoImage(Image.open(f'src\\Images\\Bloch_0.png').resize((500//3, 500//3), Image.LANCZOS)))
+
+        # for i in range(9):
+        #     color = self._default_color
+        #     if states[i] == State.X:
+        #         color = self._x_color
+        #     if states[i] == State.O:
+        #         color = self._o_color
+        #     self._canvas.itemconfigure(
+        #         self._symbol_ids[board][i], text=states[i], fill=color
+        #     )
 
     def touch_cell(self, board: int, cell: int) -> None:
         """Touch `cell` on `board`.
@@ -179,7 +239,12 @@ class Board(ttk.Frame):
             board: board index
             cell: cell index
         """
-        self._canvas.itemconfigure(self._symbol_ids[board][cell], text="?")
+        # self._canvas.itemconfigure(self._symbol_ids[board][cell], text="?")
+        print("SRS-2: touch_cell")
+        img = ImageTk.PhotoImage(Image.open(f'src\\Images\\debug.png').resize((500//3, 500//3), Image.LANCZOS))
+        self._canvas.itemconfigure(self._symbol_ids[board][cell], image=img)
+        img2 = self._canvas.itemcget(self._symbol_ids[board][cell], "image")
+        print(img2)
 
     def _index_to_pos(self, board: int, cell: int) -> tuple[float, float]:
         """Calculate cell positon on canvas from board and cell index.
@@ -303,9 +368,9 @@ class Board(ttk.Frame):
         self._font_size = int(self._board_width / 4)
         font = (self._font, self._font_size)
 
-        for symbols in self._symbol_ids:
-            for id in symbols:
-                self._canvas.itemconfigure(id, font=font)
+        # for symbols in self._symbol_ids:
+        #     for id in symbols:
+        #         self._canvas.itemconfigure(id, font=font)
 
         # scale entanglement line width
         for id in self._entanglement_ids:
