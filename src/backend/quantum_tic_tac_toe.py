@@ -110,7 +110,7 @@ def get_fair_bitstring(counts, threshold):
     try:
         filtered_probabilities = {state: prob for state, prob in probabilities.items() if prob >= threshold}
         if not filtered_probabilities:
-            raise ValueError("All states were filtered out. Consider lowering the threshold.")
+            raise ValueError("All states were filtered out.")
     except ValueError:
         filtered_probabilities = {max(counts, key=counts.get): 1}
     total_prob = sum(filtered_probabilities.values())
@@ -307,22 +307,24 @@ class QuantumTicTacToe:
         # run circuit
         for key, val in qcs.items():
             val.measure_all()
-            pm = generate_preset_pass_manager(
-                backend=self._backend, optimization_level=1
-            )
+            # Does optimization give more errors / remove quantum aspects?
+            pm = generate_preset_pass_manager(backend=self._backend, optimization_level=3)
             isa_circuit = pm.run(val)
             sampler = SamplerV2(mode=self._backend)
-            job = sampler.run([isa_circuit], shots=1024)
+            if self._backend.name == "aer_simulator":
+                job = sampler.run([isa_circuit], shots=1)
+            else:
+                job = sampler.run([isa_circuit], shots=1024)
             result = job.result()
-
             try:
                 counts = getattr(result[0].data, val.cregs[0].name, None).get_counts()
             except AttributeError:
-                raise SystemError("Empty or invalid result..")  # What after this?
-
-            # most_populated_string = max(counts, key=counts.get)  # We can change this to average
-            # results[key] = most_populated_string
-            results[key] = get_fair_bitstring(counts, 0.05)  # Make sure we don't lose the quantum aspect
+                raise SystemError("Empty or invalid result..")  # Handle this?
+            if self._backend.name == "aer_simulator":
+                results[key] = list(counts.keys())[0]
+            else:
+                # Make sure we don't lose the quantum aspect but remove the noise
+                results[key] = get_fair_bitstring(counts, 0.05)
 
         # update board
         for i in range(self._n_bits):

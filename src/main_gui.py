@@ -1,8 +1,11 @@
 from tkinter import Tk
+
+from qiskit_ibm_runtime import QiskitRuntimeService
+
 from gui.app import App
 from backend.quantum_tic_tac_toe import Move
 from qiskit_aer import AerSimulator
-from qiskit_ibm_runtime.fake_provider import FakeSherbrooke
+
 
 def main():
     root = Tk()
@@ -27,7 +30,6 @@ def main():
     else:
         # backend = FakeSherbrooke()
         backend = AerSimulator() # use non-noisy simulator
-
 
     App(root, ultimate=ultimate, moves=moves, backend=backend)
 
