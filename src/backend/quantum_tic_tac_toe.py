@@ -2,6 +2,7 @@ from enum import Enum
 from qiskit import QuantumCircuit, generate_preset_pass_manager
 from qiskit.providers import BackendV2
 from qiskit_ibm_runtime import SamplerV2
+from qiskit.quantum_info import Statevector, partial_trace, DensityMatrix
 from typing import Any
 import numpy as np
 
@@ -471,6 +472,14 @@ class QuantumTicTacToe:
         self._boards[board][cell] = State.Z_BLOCKED
 
         return self._increase_turns()
+    
+    def get_statevector(self) -> Statevector:
+        return State(self._qc)
+
+    def get_partial_trace(self, board: int, cell: int) -> DensityMatrix:
+        state = self.get_statevector()
+        return partial_trace(state, 
+            [i for i in range(81 if self._ultimate else 9) if i != cell])
 
     def circuit_string(self):
         """Get string representation of the circuit."""
