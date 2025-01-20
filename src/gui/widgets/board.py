@@ -87,6 +87,14 @@ class Board(ttk.Frame):
             for b in range(9 if ultimate else 1)
         ]
 
+        self.__image_refs = [
+            [
+                img
+                for c in range(9)
+            ]
+            for b in range(9 if ultimate else 1)
+        ]
+
         # lower the tag so the images don't get in the way of clicking on the canvas
         for list in self._symbol_ids:
             for id in list:
@@ -184,7 +192,6 @@ class Board(ttk.Frame):
         print("SRS-2: update_display")
 
         for i in range(9):
-            # color = self._default_color
             if states[i] == State.X:
                 try:
                     cwd = getcwd()
@@ -212,8 +219,10 @@ class Board(ttk.Frame):
                 except FileNotFoundError:
                     print(f"Image not found at {img_path}. Please check the path.")
                     return
+            self.__image_refs[board][i] = tk_img
             self._canvas.itemconfigure(
-                self._symbol_ids[board][i], image = tk_img)
+                self._symbol_ids[board][i], 
+                image = self.__image_refs[board][i])
 
     def touch_cell(self, board: int, cell: int) -> None:
         """Touch `cell` on `board`.
@@ -233,7 +242,8 @@ class Board(ttk.Frame):
         except FileNotFoundError:
             print(f"Image not found at {img_path}. Please check the path.")
             return
-        self._canvas.itemconfigure(self._symbol_ids[board][cell], image=tk_img)
+        self.__image_refs[board][cell] = tk_img
+        self._canvas.itemconfigure(self._symbol_ids[board][cell], image=self.__image_refs[board][cell])
 
     def _index_to_pos(self, board: int, cell: int) -> tuple[float, float]:
         """Calculate cell positon on canvas from board and cell index.
