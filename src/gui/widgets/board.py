@@ -39,6 +39,7 @@ class Board(ttk.Frame):
         # font
         self._font = "Roboto"
         self._font_size = int(self._board_width / 4)
+        self._win_font_size = int(self._board_width)
 
         # bg colours
         self._cell_disabled_color = "#E0E0E0"
@@ -47,6 +48,7 @@ class Board(ttk.Frame):
         # font colour
         self._x_color = "#CB70FF"
         self._o_color = "#44BC68"
+        self._draw_color = "#FFB300"
         self._default_color = "#ABABAB"
 
         self._canvas = Canvas(self, width=width, height=width, highlightthickness=0)
@@ -87,8 +89,8 @@ class Board(ttk.Frame):
         # list of enabled cells
         self._enabled = [[False for _ in range(9)] for _ in range(n_boards)]
 
-        # list of entanglement lines
-        self._entanglement_ids = []
+        # list of entanglement lines, indexed by control qubit board index
+        self._entanglement_ids = [[] for _ in range(n_boards)]
 
         # list of symbol ids
         self._symbol_ids = [
@@ -102,6 +104,16 @@ class Board(ttk.Frame):
                 for c in range(9)
             ]
             for b in range(9 if ultimate else 1)
+        ]
+
+        self._win_symbol_ids = [
+            self._canvas.create_text(
+                self._index_to_pos(b, 4),
+                text="",
+                fill=self._draw_color,
+                font=(self._font, self._win_font_size),
+            )
+            for b in range(n_boards)
         ]
 
         self.bind("<Configure>", self._on_resize)
@@ -123,7 +135,7 @@ class Board(ttk.Frame):
         color = "#FFA35C"
         arrow_shape = (20, 20, 5)
 
-        self._entanglement_ids.append(
+        self._entanglement_ids[c_board].append(
             self._canvas.create_line(
                 cx,
                 cy,
@@ -132,7 +144,7 @@ class Board(ttk.Frame):
                 width=width,
                 fill=color,
                 arrowshape=arrow_shape,
-                arrow="last",
+                arrow="both",
             )
         )
 
@@ -176,8 +188,13 @@ class Board(ttk.Frame):
             self._canvas.itemconfigure(id, text="", fill=self._default_color)
 
         # delete lines
-        self._canvas.delete(*self._entanglement_ids)
-        self._entanglement_ids = []
+        self._canvas.delete(*self._entanglement_ids[board])
+        self._entanglement_ids[board].clear()
+
+        # clear win symbol
+        self._canvas.itemconfigure(
+            self._win_symbol_ids[board], text="", fill=self._draw_color
+        )
 
     def update_display(self, board: int, states: list[State]) -> None:
         """Update symbols to display on `board`.
@@ -200,6 +217,26 @@ class Board(ttk.Frame):
             self._canvas.itemconfigure(
                 self._symbol_ids[board][i], text=states[i], fill=color
             )
+
+    def set_winner(self, board: int, winner: State) -> None:
+        """Set subboard winner.
+
+        Displays a symbol over the subboard based on the winner.
+
+        Args:
+            board: board index
+            winner: subboard winner
+        """
+
+        id = self._win_symbol_ids[board]
+
+        match winner:
+            case State.X:
+                self._canvas.itemconfigure(id, text="X", fill=self._x_color)
+            case State.O:
+                self._canvas.itemconfigure(id, text="O", fill=self._o_color)
+            case State.DRAW:
+                self._canvas.itemconfigure(id, text="?")
 
     def touch_cell(self, board: int, cell: int) -> None:
         """Touch `cell` on `board`.
@@ -338,18 +375,26 @@ class Board(ttk.Frame):
             for id in symbols:
                 self._canvas.itemconfigure(id, font=font)
 
+        # scale win symbols
+        self._win_font_size = int(self._board_width)
+        font = (self._font, self._win_font_size)
+
+        for id in self._win_symbol_ids:
+            self._canvas.itemconfigure(id, font=font)
+
         # scale entanglement line width
-        for id in self._entanglement_ids:
-            width = float(self._canvas.itemcget(id, "width")) * scale
-            arrow_shape = self._canvas.itemcget(id, "arrowshape").split()
+        for list in self._entanglement_ids:
+            for id in list:
+                width = float(self._canvas.itemcget(id, "width")) * scale
+                arrow_shape = self._canvas.itemcget(id, "arrowshape").split()
 
-            arrow_shape = (
-                scale * float(arrow_shape[0]),
-                scale * float(arrow_shape[1]),
-                scale * float(arrow_shape[2]),
-            )
+                arrow_shape = (
+                    scale * float(arrow_shape[0]),
+                    scale * float(arrow_shape[1]),
+                    scale * float(arrow_shape[2]),
+                )
 
-            self._canvas.itemconfigure(id, width=width, arrowshape=arrow_shape)
+                self._canvas.itemconfigure(id, width=width, arrowshape=arrow_shape)
 
         # scale grid line width
         for id in self._grid_line_ids:

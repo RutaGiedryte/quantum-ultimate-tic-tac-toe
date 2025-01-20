@@ -1,5 +1,6 @@
 from enum import Enum
 from qiskit import QuantumCircuit, generate_preset_pass_manager
+from qiskit.transpiler import CouplingMap
 from qiskit.providers import BackendV2
 from qiskit_ibm_runtime import SamplerV2
 from typing import Any
@@ -104,6 +105,21 @@ class State(Enum):
                 return "z"
 
 
+def fully_connected_81_coupling():
+    """
+    Build a CouplingMap for 81 qubits, fully connected,
+    so we skip 'CircuitTooWideForTarget' issues and routing constraints.
+    """
+
+    edges = []
+    for i in range(81):
+        for j in range(81):
+            if i != j:
+                edges.append((i, j))
+
+    return CouplingMap(edges)
+
+
 class QuantumTicTacToe:
     """Class representing quantum tic-tac-toe game."""
 
@@ -127,13 +143,14 @@ class QuantumTicTacToe:
 
         self._ultimate = ultimate
         self._n_bits = 81 if ultimate else 9
+        self._n_boards = 9 if ultimate else 1
 
-        self._qc = QuantumCircuit(self._n_bits)
+        self._qc = QuantumCircuit(self._n_bits, self._n_bits)
 
         self._backend = backend
         self._max_angle = max_angle
         self._max_controlled_angle = max_controlled_angle
-        self._max_moves = max_turns
+        self._max_turns = max_turns
 
         self.reset()
 
@@ -149,8 +166,7 @@ class QuantumTicTacToe:
         """Reset game."""
 
         # initialise boards
-        n_boards = 9 if self._ultimate else 1
-        self._boards = [[State.EMPTY for _ in range(9)] for _ in range(n_boards)]
+        self._boards = [[State.EMPTY for _ in range(9)] for _ in range(self._n_boards)]
         # number of turns since last collapse
         self._turns = 0
         # control qubit position
@@ -162,6 +178,12 @@ class QuantumTicTacToe:
         self._touched = [set() for _ in self._boards]
         # board wins
         self._board_wins = [State.EMPTY for _ in range(9)]
+        # cells to measure
+        self._active_cells = [set() for _ in range(self._n_boards)]
+        # entangled boards. board_id: set of entangled boards
+        self._entangled_boards = {i: set() for i in range(self._n_boards)}
+        # available boards
+        self._available_boards = {i for i in range(self._n_boards)}
 
     def has_control(self) -> bool:
         """Check if control qubit has been set.
@@ -198,10 +220,10 @@ class QuantumTicTacToe:
             list of board indices that can be used with `move`
         """
 
-        if self.count_avialable_cells(0, move) == 0:
-            return []
-
-        return [0]
+        # filter out boards that cannot be used with current move
+        return list(
+            {i for i in self._available_boards if self.count_avialable_cells(i, move)}
+        )
 
     def available_cells(self, board: int, move: Move) -> list[int]:
         """Get the indices of available cells on board `board` for `move`.
@@ -273,26 +295,56 @@ class QuantumTicTacToe:
 
         return self._boards[i]
 
-    def collapse(self) -> bool:
-        """Collapse the board.
+    def collapse(self, board: int | None = None) -> set[int]:
+        """Collapse `board`.
+
+        Args:
+            board: board index. None if collapsing all boards
 
         Returns:
-            whether the board collapsed
+            set of collapsed board indices
         """
 
         qcs = {"exist": self._qc.copy(), "symbol": self._qc.copy()}
 
-        # change basis for symbols
-        for i in range(9):
-            qcs["symbol"].h(i)
+        if board is None:
+            boards = {i for i in range(self._n_boards)}
+        else:
+            # get boards to collapse
+            boards = set()
+            to_check = [board]
+            while len(to_check):
+                b = to_check.pop()
+
+                if b in boards:
+                    continue
+                boards.add(b)
+
+                for entangled_board in self._entangled_boards[b]:
+                    to_check.append(entangled_board)
+                self._entangled_boards[b].clear()
+
+        # measure only active cells
+        for b, cells in enumerate(self._active_cells):
+            if b not in boards:
+                continue
+
+            for c in cells:
+                index = b * 9 + c
+                qcs["exist"].measure(index, index)
+                qcs["symbol"].h(index)
+                qcs["symbol"].measure(index, index)
+
+            cells.clear()
 
         results = {}
 
+        cmap = fully_connected_81_coupling()
+
         # run circuit
         for key, val in qcs.items():
-            val.measure_all()
             pm = generate_preset_pass_manager(
-                backend=self._backend, optimization_level=1
+                backend=self._backend, optimization_level=1, coupling_map=cmap
             )
             isa_circuit = pm.run(val)
             sampler = SamplerV2(mode=self._backend)
@@ -310,6 +362,10 @@ class QuantumTicTacToe:
         # update board
         for i in range(self._n_bits):
             board = i // 9
+
+            if board not in boards:
+                continue
+
             cell = i % 9
 
             # position already taken
@@ -326,17 +382,23 @@ class QuantumTicTacToe:
                     State.X if int(results["symbol"][self._n_bits - 1 - i]) else State.O
                 )
 
-        # reset cirquit
-        self._qc = QuantumCircuit(self._n_bits)
+            # reset measured qubit
+            self._qc.reset(i)
 
-        self._turns = 0
+        # reset whole circuit if collapsed whole board
+        if board is None:
+            self._qc = QuantumCircuit(self._n_bits, self._n_bits)
+
         self._touched = [set() for _ in self._boards]
 
         # update big board
-        for i, board in enumerate(self._boards):
-            self._board_wins[i] = self._check_win(board)
+        for i, b in enumerate(self._boards):
+            self._board_wins[i] = self._check_win(b)
 
-        return True
+        self._turns = -1
+        self._increase_turns()
+
+        return boards
 
     def check_win(self, board: int | None = None) -> State:
         """Check whether someone has won.
@@ -354,7 +416,9 @@ class QuantumTicTacToe:
             return self._board_wins[0]
         return self._board_wins[board]
 
-    def rotate(self, board: int, cell: int, axis: Axis, angle: float, n: int) -> bool:
+    def rotate(
+        self, board: int, cell: int, axis: Axis, angle: float, n: int
+    ) -> set[int]:
         """Add rotation gate to the circuit.
 
         If it has been `max_moves` since the last collapse, the board collapses.
@@ -367,7 +431,7 @@ class QuantumTicTacToe:
             n: number of qubits that are rotated this turn
 
         Returns:
-            whether the board collapsed
+            set of collapsed board indices
         """
 
         assert board < len(self._boards), "Invalid board index"
@@ -391,7 +455,7 @@ class QuantumTicTacToe:
             case Axis.Z:
                 self._qc.rz(angle, qubit)
 
-        self._touched[board].add(cell)
+        self._touch_cell(board, cell)
 
         if self._moves_left_in_turn == 0:
             self._moves_left_in_turn = n
@@ -400,7 +464,7 @@ class QuantumTicTacToe:
 
         if self._moves_left_in_turn == 0:
             return self._increase_turns()
-        return False
+        return set()
 
     def rotate_control(self, board: int, cell: int) -> None:
         """Set control qubit.
@@ -420,7 +484,8 @@ class QuantumTicTacToe:
         self._boards[board][cell] = State.Z_BLOCKED
 
         self._moves_left_in_turn = 1
-        self._touched[board].add(cell)
+
+        self._touch_cell(board, cell)
 
     def rotate_target(
         self,
@@ -428,7 +493,7 @@ class QuantumTicTacToe:
         cell: int,
         axis: Axis,
         angle: float,
-    ) -> bool:
+    ) -> set[int]:
         """Add controlled rotation gate to the circuit.
 
         The control qubit has to be set (`rotate_control`) before calling this function. If it has been `max_moves` since the last collapse, the board collapses.
@@ -440,7 +505,7 @@ class QuantumTicTacToe:
             angle: angle to rotate by
 
         Returns:
-            whether the board collapsed
+            set of collapsed board indices
         """
 
         assert self._c_board != -1 and self._c_cell != -1, (
@@ -460,6 +525,10 @@ class QuantumTicTacToe:
             case Axis.Z:
                 self._qc.crz(angle, c_qubit, t_qubit)
 
+        # add to entangled boards
+        self._entangled_boards[board].add(self._c_board)
+        self._entangled_boards[self._c_board].add(board)
+
         # reset control qubit index
         self._c_board = -1
         self._c_cell = -1
@@ -469,6 +538,8 @@ class QuantumTicTacToe:
         # block z-rotation
         self._boards[board][cell] = State.Z_BLOCKED
 
+        self._touch_cell(board, cell)
+
         return self._increase_turns()
 
     def circuit_string(self):
@@ -476,22 +547,62 @@ class QuantumTicTacToe:
 
         return self._qc.draw()
 
-    def _increase_turns(self) -> bool:
+    def _touch_cell(self, board: int, cell: int) -> None:
+        """Add cell to list of active cells.
+        
+        Removes the board from the list of available boards if there is more than one board available.
+
+        Args:
+            board: board index
+            cell: cell index
+        """
+
+        self._active_cells[board].add(cell)
+        self._touched[board].add(cell)
+        if len(self._available_boards) != 1:
+            self._available_boards.remove(board)
+
+    def _increase_turns(self) -> set[int]:
         """Increase the number of moves.
 
         Collapses the board when the number of move has reached `max_moves`.
+        Sets available boards based on touched cells.
 
         Returns:
-            whether the board collapsed
+            set of collapsed board indices
         """
+
         self._turns += 1
+
+        # collapse boards if reached max turns
+        collapsed = set()
+        if self._turns == self._max_turns:
+            collapsed = self.collapse()
+
+        # get available boards
+        self._available_boards = {
+            cell
+            for touched in self._touched
+            for cell in touched
+            if cell == 0 or self._ultimate
+        }
+
+        # filter out finished boards
+        finished = {
+            i for i, state in enumerate(self._board_wins) if state != State.EMPTY
+        }
+
+        self._available_boards = self._available_boards.difference(finished)
+
+        # enable all unfinished boards if no boards available
+        if len(self._available_boards) == 0:
+            self._available_boards = {i for i in range(self._n_boards)}.difference(
+                finished
+            )
+
         self._touched = [set() for _ in self._boards]
 
-        if self._turns == self._max_moves:
-            self.collapse()
-            return True
-
-        return False
+        return collapsed
 
     def _check_win(self, board: list[State]) -> State:
         """Check whether someone has won a board.
