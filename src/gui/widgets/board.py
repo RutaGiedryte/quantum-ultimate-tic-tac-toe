@@ -4,7 +4,7 @@ from PIL import Image, ImageTk
 from qiskit.visualization import plot_bloch_vector
 
 from backend.quantum_tic_tac_toe import State
-import os
+from os import getcwd, path
 
 
 class Board(ttk.Frame):
@@ -71,8 +71,9 @@ class Board(ttk.Frame):
         self._entanglement_ids = []
 
         #Make the image of a standard bloch sphere
-        plot_bloch_vector([1, 0, 0], coord_type='spherical').savefig(os.path.join(".", "src","Images","Bloch_0.png"), transparent=True)
-        img = ImageTk.PhotoImage(Image.open(os.path.join(".", "src","Images","Bloch_0.png")).resize((width//3, width//3), Image.LANCZOS))
+        cwd = getcwd()
+        plot_bloch_vector([1, 0, 0], coord_type='spherical').savefig(path.join(cwd, "src","Images","Bloch_0.png"), transparent=True)
+        img = ImageTk.PhotoImage(Image.open(path.join(cwd, "src","Images","Bloch_0.png")).resize((width//3, width//3), Image.LANCZOS))
         
         self._symbol_ids = [
             [
@@ -150,10 +151,19 @@ class Board(ttk.Frame):
         """
 
         # clear symbols
+
+        try:
+            cwd = getcwd()
+            img_path = path.join(cwd, "src", "Images","Bloch_0.png")
+            img = Image.open(img_path).resize((500 // 3, 500 // 3), Image.LANCZOS)
+            tk_img = ImageTk.PhotoImage(img)
+        except FileNotFoundError:
+            print(f"Image not found at {img_path}. Please check the path.")
+            return
+        
         for symbols in self._symbol_ids:
             for symbol in symbols:
-                self._canvas.itemconfigure(symbol, image=
-                    ImageTk.PhotoImage(Image.open(os.path.join(".", "src","Images","debug.png")).resize((500//3, 500//3), Image.LANCZOS)))
+                self._canvas.itemconfigure(symbol, image=tk_img)
 
         # delete lines
         self._canvas.delete(*self._entanglement_ids)
@@ -177,7 +187,8 @@ class Board(ttk.Frame):
             # color = self._default_color
             if states[i] == State.X:
                 try:
-                    img_path = os.path.join(".", "src", "Images","X.png")
+                    cwd = getcwd()
+                    img_path = path.join(cwd, "src", "Images","X.png")
                     img = Image.open(img_path).resize((500 // 3, 500 // 3), Image.LANCZOS)
                     tk_img = ImageTk.PhotoImage(img)
                 except FileNotFoundError:
@@ -185,7 +196,8 @@ class Board(ttk.Frame):
                     return
             if states[i] == State.O:
                 try:
-                    img_path = 'src\\Images\\O.png'
+                    cwd = getcwd()
+                    img_path = path.join(cwd, "src","Images","O.png")
                     img = Image.open(img_path).resize((500 // 3, 500 // 3), Image.LANCZOS)
                     tk_img = ImageTk.PhotoImage(img)
                 except FileNotFoundError:
@@ -193,7 +205,8 @@ class Board(ttk.Frame):
                     return  
             else:
                 try:
-                    img_path = 'src\\Images\\Bloch_0.png'
+                    cwd = getcwd()
+                    img_path = path.join(cwd, "src","Images","Bloch_0.png")
                     img = Image.open(img_path).resize((500 // 3, 500 // 3), Image.LANCZOS)
                     tk_img = ImageTk.PhotoImage(img)
                 except FileNotFoundError:
@@ -211,12 +224,16 @@ class Board(ttk.Frame):
             board: board index
             cell: cell index
         """
-        # self._canvas.itemconfigure(self._symbol_ids[board][cell], text="?")
         print("SRS-2: touch_cell")
-        img = ImageTk.PhotoImage(Image.open(os.path.join(".", "src","Images","debug.png")).resize((500//3, 500//3), Image.LANCZOS))
-        self._canvas.itemconfigure(self._symbol_ids[board][cell], image=img)
-        img2 = self._canvas.itemcget(self._symbol_ids[board][cell], "image")
-        print(img2)
+        try:
+            cwd = getcwd()
+            img_path = path.join(cwd, "src","Images","debug.png")
+            img = Image.open(img_path).resize((500 // 3, 500 // 3), Image.LANCZOS)
+            tk_img = ImageTk.PhotoImage(img)
+        except FileNotFoundError:
+            print(f"Image not found at {img_path}. Please check the path.")
+            return
+        self._canvas.itemconfigure(self._symbol_ids[board][cell], image=tk_img)
 
     def _index_to_pos(self, board: int, cell: int) -> tuple[float, float]:
         """Calculate cell positon on canvas from board and cell index.
