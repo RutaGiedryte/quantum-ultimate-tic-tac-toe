@@ -2,8 +2,9 @@ from tkinter import Widget, ttk, Canvas
 from collections.abc import Callable
 from PIL import Image, ImageTk
 from qiskit.visualization import plot_bloch_vector
+from qiskit.quantum_info import partial_trace
 
-from backend.quantum_tic_tac_toe import State
+from backend.quantum_tic_tac_toe import State, get_theta_and_phi
 from os import getcwd, path
 
 
@@ -237,6 +238,18 @@ class Board(ttk.Frame):
         try:
             cwd = getcwd()
             img_path = path.join(cwd, "src","Images","debug.png")
+
+            #Generate a new bloch image
+            reduced_state = partial_trace(state, 
+                [i for i in range(81 if self._ultimate else 9) if i != cell])
+            theta, phi = get_theta_and_phi(reduced_state)
+            plot_bloch_vector([1, theta, phi], coord_type='spherical').saveimg(
+                #Image directory with bloch_{cell}
+                path.join(cwd, "src", "Images", f"Bloch_{cell}")
+            )
+
+
+
             img = Image.open(img_path).resize((500 // 3, 500 // 3), Image.LANCZOS)
             tk_img = ImageTk.PhotoImage(img)
         except FileNotFoundError:
