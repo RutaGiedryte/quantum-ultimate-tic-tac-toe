@@ -1,8 +1,9 @@
 import math
 from qiskit_ibm_runtime.fake_provider import FakeSherbrooke
+from qiskit_ibm_runtime import QiskitRuntimeService
 from backend.quantum_tic_tac_toe import Axis, QuantumTicTacToe, State, Move
 from qiskit_aer import AerSimulator
-
+from backend.parser import create_parser
 
 def print_board(board: list[State]):
     """Print the board.
@@ -275,12 +276,14 @@ def qttt_cli(ultimate: bool, moves: list[Move], backend):
 
 
 def main():
-    service = None
-    # service = QiskitRuntimeService()
+    parser = create_parser("qttt-cli")
+    args = parser.parse_args()
+
+    service = None if args.simulate else QiskitRuntimeService()
 
     moves = [Move.RY, Move.RZ, Move.CRX, Move.COLLAPSE]
 
-    ultimate = False
+    ultimate = args.ultimate
 
     # set backend
     if service:

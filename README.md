@@ -8,10 +8,13 @@ pip install --editable .
 
 GUI:
 ```bash
-qttt
+qttt [-h] [-u] [-s]
 ```
 
 CLI:
 ```bash
-qttt-cli
+qttt-cli [-h] [-u] [-s]
 ```
+
+- -u — ultimate version
+- -s — simulated
