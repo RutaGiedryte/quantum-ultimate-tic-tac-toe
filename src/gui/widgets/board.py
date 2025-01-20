@@ -34,22 +34,45 @@ class Board(ttk.Frame):
 
         self._board_width = width / 3 if ultimate else width
 
+        n_boards = 9 if ultimate else 1
+
         # font
         self._font = "Roboto"
         self._font_size = int(self._board_width / 4)
+
+        # bg colours
+        self._cell_disabled_color = "#E0E0E0"
+        self._cell_enabled_color = "#FFFFFF"
 
         # font colour
         self._x_color = "#CB70FF"
         self._o_color = "#44BC68"
         self._default_color = "#ABABAB"
 
-        self._canvas = Canvas(self, width=width, height=width)
+        self._canvas = Canvas(self, width=width, height=width, highlightthickness=0)
         self._canvas.bind("<Button-1>", lambda event: self._on_click(event))
         self._canvas.grid()
 
         self._width = width
 
         self._grid_line_ids = []
+
+        # cell backgrounds
+        self._cell_bg_ids = [[] for _ in range(n_boards)]
+        offset = self._board_width / 3 / 2
+
+        for b, cells in enumerate(self._cell_bg_ids):
+            for c in range(9):
+                x_centre, y_centre = self._index_to_pos(b, c)
+                id = self._canvas.create_rectangle(
+                    x_centre - offset,
+                    y_centre - offset,
+                    x_centre + offset,
+                    y_centre + offset,
+                    fill=self._cell_disabled_color,
+                    width=0,
+                )
+                cells.append(id)
 
         # create grid lines
         self._create_grid(width, 0, 0)
@@ -62,7 +85,7 @@ class Board(ttk.Frame):
                     )
 
         # list of enabled cells
-        self._enabled = [[False for _ in range(9)] for _ in range(9 if ultimate else 1)]
+        self._enabled = [[False for _ in range(9)] for _ in range(n_boards)]
 
         # list of entanglement lines
         self._entanglement_ids = []
@@ -123,6 +146,9 @@ class Board(ttk.Frame):
 
         for c in cells:
             self._enabled[board][c] = True
+            self._canvas.itemconfigure(
+                self._cell_bg_ids[board][c], fill=self._cell_enabled_color
+            )
 
     def disable(self, board: int) -> None:
         """Disable `board`.
@@ -133,16 +159,21 @@ class Board(ttk.Frame):
 
         self._enabled[board] = [False for _ in range(9)]
 
-    def reset(self) -> None:
-        """Reset the board to its default state.
+        for id in self._cell_bg_ids[board]:
+            self._canvas.itemconfigure(id, fill=self._cell_disabled_color)
+
+    def reset(self, board) -> None:
+        """Reset the `board` to its default state.
 
         Clears cell symbols. Deletes entanglement lines.
+
+        Args:
+            board: board index
         """
 
         # clear symbols
-        for symbols in self._symbol_ids:
-            for symbol in symbols:
-                self._canvas.itemconfigure(symbol, text="", fill=self._default_color)
+        for id in self._symbol_ids[board]:
+            self._canvas.itemconfigure(id, text="", fill=self._default_color)
 
         # delete lines
         self._canvas.delete(*self._entanglement_ids)
@@ -158,7 +189,7 @@ class Board(ttk.Frame):
             states: cell states on board
         """
 
-        self.reset()
+        self.reset(board)
 
         for i in range(9):
             color = self._default_color

@@ -28,6 +28,8 @@ class App:
         # style
         style = ttk.Style()
         style.configure("TopInfo.TLabel", font=("Roboto", 20))
+        style.configure(".", background="#E0E0E0")
+        style.configure("TButton", background="#F5F5F5")
 
         # create game
         self._game = QuantumTicTacToe(backend, math.pi / 2, math.pi, 10, ultimate)
@@ -383,8 +385,9 @@ class App:
         # reset game
         self._game.reset()
 
-        # reset board
-        self._board.reset()
+        # reset boards
+        for i in range(self._n_boards):
+            self._board.reset(i)
 
         # hide again button
         self._reset_button.grid_forget()
