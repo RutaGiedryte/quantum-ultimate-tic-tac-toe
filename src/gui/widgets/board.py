@@ -4,6 +4,7 @@ from PIL import Image, ImageTk
 from qiskit.visualization import plot_bloch_vector
 
 from backend.quantum_tic_tac_toe import State
+import os
 
 
 class Board(ttk.Frame):
@@ -70,8 +71,8 @@ class Board(ttk.Frame):
         self._entanglement_ids = []
 
         #Make the image of a standard bloch sphere
-        plot_bloch_vector([1, 0, 0], coord_type='spherical').savefig(r'src\Images\Bloch_0.png', transparent=True)
-        img = ImageTk.PhotoImage(Image.open(f'src\\Images\\Bloch_0.png').resize((width//3, width//3), Image.LANCZOS))
+        plot_bloch_vector([1, 0, 0], coord_type='spherical').savefig(os.path.join("src","Images","Bloch_0.png"), transparent=True)
+        img = ImageTk.PhotoImage(Image.open(os.path.join("src","Images","Bloch_0.png")).resize((width//3, width//3), Image.LANCZOS))
         
         self._symbol_ids = [
             [
@@ -166,12 +167,7 @@ class Board(ttk.Frame):
         for symbols in self._symbol_ids:
             for symbol in symbols:
                 self._canvas.itemconfigure(symbol, image=
-                    ImageTk.PhotoImage(Image.open(f'src\\Images\\debug.png').resize((500//3, 500//3), Image.LANCZOS)))
-
-        # # clear symbols
-        # for symbols in self._symbol_ids:
-        #     for symbol in symbols:
-        #         self._canvas.itemconfigure(symbol, text="", fill=self._default_color)
+                    ImageTk.PhotoImage(Image.open(os.path.join("src","Images","debug.png")).resize((500//3, 500//3), Image.LANCZOS)))
 
         # delete lines
         self._canvas.delete(*self._entanglement_ids)
@@ -194,41 +190,31 @@ class Board(ttk.Frame):
         for i in range(9):
             # color = self._default_color
             if states[i] == State.X:
-
                 try:
-                    img_path = 'src\\Images\\X.png'  # Ensure the path is correct
+                    img_path = os.path.join("src","Images","X.png")
                     img = Image.open(img_path).resize((500 // 3, 500 // 3), Image.LANCZOS)
                     tk_img = ImageTk.PhotoImage(img)
                 except FileNotFoundError:
                     print(f"Image not found at {img_path}. Please check the path.")
                     return
-                self._canvas.itemconfigure(
-                self._symbol_ids[board][i], image = tk_img)
-
             if states[i] == State.O:
                 try:
-                    img_path = 'src\\Images\\O.png'  # Ensure the path is correct
+                    img_path = 'src\\Images\\O.png'
+                    img = Image.open(img_path).resize((500 // 3, 500 // 3), Image.LANCZOS)
+                    tk_img = ImageTk.PhotoImage(img)
+                except FileNotFoundError:
+                    print(f"Image not found at {img_path}. Please check the path.")
+                    return  
+            else:
+                try:
+                    img_path = 'src\\Images\\Bloch_0.png'
                     img = Image.open(img_path).resize((500 // 3, 500 // 3), Image.LANCZOS)
                     tk_img = ImageTk.PhotoImage(img)
                 except FileNotFoundError:
                     print(f"Image not found at {img_path}. Please check the path.")
                     return
-                self._canvas.itemconfigure(
+            self._canvas.itemconfigure(
                 self._symbol_ids[board][i], image = tk_img)
-            else:
-                self._canvas.itemconfigure(
-                self._symbol_ids[board][i], image = 
-                ImageTk.PhotoImage(Image.open(f'src\\Images\\Bloch_0.png').resize((500//3, 500//3), Image.LANCZOS)))
-
-        # for i in range(9):
-        #     color = self._default_color
-        #     if states[i] == State.X:
-        #         color = self._x_color
-        #     if states[i] == State.O:
-        #         color = self._o_color
-        #     self._canvas.itemconfigure(
-        #         self._symbol_ids[board][i], text=states[i], fill=color
-        #     )
 
     def touch_cell(self, board: int, cell: int) -> None:
         """Touch `cell` on `board`.
@@ -241,7 +227,7 @@ class Board(ttk.Frame):
         """
         # self._canvas.itemconfigure(self._symbol_ids[board][cell], text="?")
         print("SRS-2: touch_cell")
-        img = ImageTk.PhotoImage(Image.open(f'src\\Images\\debug.png').resize((500//3, 500//3), Image.LANCZOS))
+        img = ImageTk.PhotoImage(Image.open(os.path.join("src","Images","debug.png")).resize((500//3, 500//3), Image.LANCZOS))
         self._canvas.itemconfigure(self._symbol_ids[board][cell], image=img)
         img2 = self._canvas.itemcget(self._symbol_ids[board][cell], "image")
         print(img2)
