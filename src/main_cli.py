@@ -1,10 +1,7 @@
-from collections.abc import Callable
 import math
-
-from qiskit_ibm_runtime import QiskitRuntimeService
 from qiskit_ibm_runtime.fake_provider import FakeSherbrooke
-
-from backend.quantum_tic_tac_toe import Axis, QuantumTicTacToe, State
+from backend.quantum_tic_tac_toe import Axis, QuantumTicTacToe, State, Move
+from qiskit_aer import AerSimulator
 
 
 def print_board(board: list[State]):
@@ -72,33 +69,38 @@ def get_float(min: float, max: float, prompt: str, error: str) -> float:
             print(error)
 
 
-def get_valid_position(board: list[State]) -> int:
-    """Get cell index from stdin that has not been taken on `board`.
+def get_valid_position(game: QuantumTicTacToe, board: int, move: Move) -> int:
+    """Get cell index for `board` from stdin that is allowed for `move`.
 
     Args:
-        board: board
+        game: game object
+        board: board index
+        move: move
 
     Returns:
         cell index
     """
 
-    assert len(board) == 9, "Not a valid board"
+    available = game.available_cells(board, move)
+
+    # list with 1-based indexing
+    available_from_one = [i + 1 for i in available]
 
     while True:
         pos = get_int(
             1,
             9,
-            "Enter cell number [1-9]: ",
-            "The cell number must be in the range [1,9].",
+            f"Enter cell number {available_from_one}: ",
+            f"The cell number must be in {available_from_one}.",
         )
 
         # indices start from 0
         pos -= 1
 
-        if board[pos] == State.EMPTY:
+        if pos in available:
             return pos
         else:
-            print("This cell already has a value.")
+            print("You cannot use this cell.")
 
 
 def rotate(game: QuantumTicTacToe, axis: Axis) -> bool:
@@ -112,7 +114,15 @@ def rotate(game: QuantumTicTacToe, axis: Axis) -> bool:
         whether the board collapsed
     """
 
-    max_n = min(2, game.count_empty_cells(0))
+    match axis:
+        case Axis.X:
+            move = Move.RX
+        case Axis.Y:
+            move = Move.RY
+        case Axis.Z:
+            move = Move.RZ
+
+    max_n = min(2, game.count_avialable_cells(0, move))
 
     # get number of qubits to rotate
     n = get_int(
@@ -130,13 +140,7 @@ def rotate(game: QuantumTicTacToe, axis: Axis) -> bool:
 
     for _ in range(n):
         # get position
-        pos = 0
-        while True:
-            pos = get_valid_position(game.board(0))
-            if pos in used:
-                print("You already rotated this qubit.")
-            else:
-                break
+        pos = get_valid_position(game, 0, move)
 
         # get angle
         angle = get_float(
@@ -167,17 +171,25 @@ def rotate_controlled(game: QuantumTicTacToe, axis: Axis) -> bool:
         whether the board collapsed
     """
 
-    # get control and target
+    move = None
+    match axis:
+        case Axis.X:
+            move = Move.CRX
+        case Axis.Y:
+            move = Move.CRY
+        case Axis.Z:
+            move = Move.CRZ
+
+    # get control qubit index
     print("Choose control qubit.")
-    control = get_valid_position(game.board(0))
+    control = get_valid_position(game, 0, move)
+
+    # set control qubit
+    game.rotate_control(0, control)
+
+    # get target qubit index
     print("Choose target qubit.")
-    target = 0
-    while True:
-        target = get_valid_position(game.board(0))
-        if target == control:
-            print("Target cannot be the same as control.")
-        else:
-            break
+    target = get_valid_position(game, 0, move)
 
     # get angle
     angle = get_float(
@@ -187,79 +199,31 @@ def rotate_controlled(game: QuantumTicTacToe, axis: Axis) -> bool:
         f"The angle must be between {-game.max_controlled_angle} and {game.max_controlled_angle}.",
     )
 
-    # add controlled rotation gate
-    game.rotate_control(0, control)
+    # set target qubit
     return game.rotate_target(0, target, axis, angle)
 
 
-class MoveType:
-    """Class representing a move type.
-
-    Attributes:
-        description: description of the move type
-        min_empty: min. number of empty cells required for the move type
-        move: function to call when making the move
-    """
-
-    def __init__(
-        self,
-        description: str,
-        min_empty: int,
-        move: Callable[[QuantumTicTacToe], bool],
-    ) -> None:
-        """Create a move type object.
-
-        Args:
-            description: description of the move type
-            min_empty: min. number of empty cells required for the move type
-            move: function to call when making the move. the function should return whether the board collapsed
-        """
-
-        self._description = description
-        self._min_empty = min_empty
-        self._move = move
-
-    @property
-    def description(self) -> str:
-        return self._description
-
-    @property
-    def min_empty(self) -> int:
-        return self._min_empty
-
-    @property
-    def move(self) -> Callable[[QuantumTicTacToe], bool]:
-        return self._move
-
-
-def qttt_cli(ultimate: bool, service=None):
+def qttt_cli(ultimate: bool, moves: list[Move], backend):
     """Game loop.
 
     Args:
         ultimate: whether to create ultimate version
-        service: What backend to use
+        moves: list of allowed moves
+        backend: backend used for running the quantum circuit
     """
 
-    # set backend
-    if service:
-        backend = service.least_busy(simulator=False, operational=True, min_num_qubits=81 if ultimate else 9)
-    else:
-        backend = FakeSherbrooke()
-
     # initialise move types
-    move_types = {
-        "x": MoveType("rotate around x-axis", 1, lambda game: rotate(game, Axis.X)),
-        "z": MoveType("rotate around z-axis", 1, lambda game: rotate(game, Axis.Z)),
-        "cy": MoveType(
-            "controlled rotation around y-axis",
-            2,
-            lambda game: rotate_controlled(game, Axis.Y),
-        ),
-        "c": MoveType("collapse", 1, lambda game: game.collapse()),
+    move_callbacks = {
+        Move.RX: lambda game: rotate(game, Axis.X),
+        Move.RY: lambda game: rotate(game, Axis.Y),
+        Move.RZ: lambda game: rotate(game, Axis.Z),
+        Move.CRX: lambda game: rotate_controlled(game, Axis.X),
+        Move.CRY: lambda game: rotate_controlled(game, Axis.Y),
+        Move.CRZ: lambda game: rotate_controlled(game, Axis.Z),
+        Move.COLLAPSE: lambda game: game.collapse(),
     }
 
     turn = State.X
-    empty = 9
 
     game = QuantumTicTacToe(backend, math.pi / 2, math.pi, 10, ultimate)
 
@@ -267,25 +231,27 @@ def qttt_cli(ultimate: bool, service=None):
         print_board(game.board(0))
         print(f"It's {turn}'s turn.")
 
+        available_moves = {move.key: move for move in game.available_moves(moves)}
+
         # create prompt
         prompt = "Select move type: "
-        for i, key in enumerate(move_types):
-            prompt += f"{move_types[key].description} [{key}]"
-            if i < len(move_types) - 1:
+        for i, key in enumerate(available_moves):
+            prompt += f"{available_moves[key].description} [{key}]"
+            if i < len(available_moves) - 1:
                 prompt += " | "
         prompt += ": "
 
         # get move type
-        move_type = None
+        move_str = None
 
         while True:
-            move_type = input(prompt)
-            if move_type not in move_types.keys():
+            move_str = input(prompt)
+            if move_str not in available_moves.keys():
                 print("Invalid move type!")
             else:
                 break
 
-        collapsed = move_types[move_type].move(game)
+        collapsed = move_callbacks[available_moves[move_str]](game)
 
         # draw circuit
         if not collapsed:
@@ -305,21 +271,27 @@ def qttt_cli(ultimate: bool, service=None):
                     print(f"{winner} has won!")
                 break
 
-            # get the number of empty cells
-            empty = game.count_empty_cells(0)
-
-            # remove unavailable moves
-            move_types = {
-                key: val for key, val in move_types.items() if empty >= val.min_empty
-            }
-
         turn = State.X if turn == State.O else State.O
 
 
 def main():
     service = None
     # service = QiskitRuntimeService()
-    qttt_cli(False, service=service)
+
+    moves = [Move.RY, Move.RZ, Move.CRX, Move.COLLAPSE]
+
+    ultimate = False
+
+    # set backend
+    if service:
+        backend = service.least_busy(
+            simulator=False, operational=True, min_num_qubits=81 if ultimate else 9
+        )
+    else:
+        # backend = FakeSherbrooke()
+        backend = AerSimulator() # use non-noisy simulation
+
+    qttt_cli(ultimate, moves, backend)
 
 
 if __name__ == "__main__":
