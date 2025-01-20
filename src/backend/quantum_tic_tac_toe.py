@@ -417,6 +417,8 @@ class QuantumTicTacToe:
         self._c_board = board
         self._c_cell = cell
 
+        self._boards[board][cell] = State.Z_BLOCKED
+
         self._moves_left_in_turn = 1
         self._touched[board].add(cell)
 
