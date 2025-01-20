@@ -1,3 +1,4 @@
+import random
 from enum import Enum
 from qiskit import QuantumCircuit, generate_preset_pass_manager
 from qiskit.providers import BackendV2
@@ -32,16 +33,31 @@ class Axis(Enum):
     Z = 2
 
 
+def get_fair_bitstring(counts, threshold):
+    probabilities = {state: count / 1024 for state, count in counts.items()}
+    try:
+        filtered_probabilities = {state: prob for state, prob in probabilities.items() if prob >= threshold}
+        if not filtered_probabilities:
+            raise ValueError("All states were filtered out. Consider lowering the threshold.")
+    except ValueError:
+        filtered_probabilities = {max(counts, key=counts.get): 1}
+    total_prob = sum(filtered_probabilities.values())
+    normalized_probabilities = {state: prob / total_prob for state, prob in filtered_probabilities.items()}
+    states, probs = zip(*normalized_probabilities.items())
+    chosen_state = random.choices(states, weights=probs, k=1)[0]
+    return chosen_state
+
+
 class QuantumTicTacToe:
     """Class representing quantum tic-tac-toe game."""
 
     def __init__(
-        self,
-        backend: BackendV2,
-        max_angle: float,
-        max_controlled_angle: float,
-        max_turns: int,
-        ultimate: bool,
+            self,
+            backend: BackendV2,
+            max_angle: float,
+            max_controlled_angle: float,
+            max_turns: int,
+            ultimate: bool,
     ):
         """Create the game.
 
@@ -194,8 +210,9 @@ class QuantumTicTacToe:
             except AttributeError:
                 raise SystemError("Empty or invalid result..")  # What after this?
 
-            most_populated_string = max(counts, key=counts.get)  # We can change this to average
-            results[key] = most_populated_string
+            # most_populated_string = max(counts, key=counts.get)  # We can change this to average
+            # results[key] = most_populated_string
+            results[key] = get_fair_bitstring(counts, 0.05)  # Make sure we don't lose the quantum aspect
 
         # update board
         for i in range(self._n_bits):
@@ -301,11 +318,11 @@ class QuantumTicTacToe:
         self._touched[board].add(cell)
 
     def rotate_target(
-        self,
-        t_board: int,
-        t_cell: int,
-        axis: Axis,
-        angle: float,
+            self,
+            t_board: int,
+            t_cell: int,
+            axis: Axis,
+            angle: float,
     ) -> bool:
         """Add controlled rotation gate to the circuit.
 
