@@ -3,6 +3,7 @@ from collections.abc import Callable
 from PIL import Image, ImageTk
 from qiskit.visualization import plot_bloch_vector
 from qiskit.quantum_info import DensityMatrix
+import matplotlib.pyplot as plt
 
 from backend.quantum_tic_tac_toe import State, get_theta_and_phi
 from os import getcwd, path
@@ -118,7 +119,6 @@ class Board(ttk.Frame):
         except FileNotFoundError:
             print(f"Image not found at {img_path}. Please check the path.")
             return
-        
 
     def entangle(self, c_board: int, c_cell: int, t_board: int, t_cell: int) -> None:
         """Create arrow from control to target.
@@ -218,7 +218,7 @@ class Board(ttk.Frame):
             board: board index
             cell: cell index
         """
-        
+
         try:
             img_path = path.join(getcwd(), "src", "Images", f"Bloch_{cell}.png")
             theta, phi = get_theta_and_phi(reduced_state)
@@ -226,9 +226,11 @@ class Board(ttk.Frame):
             plot_bloch_vector([1, theta, phi], coord_type="spherical").savefig(
                 path.join(img_path), transparent=True
             )
+            plt.close()
 
             img = Image.open(img_path).resize(
-                (self._board_width // 3, self._board_width // 3), Image.Resampling.LANCZOS
+                (int(self._board_width // 3), int(self._board_width / 3)),
+                Image.Resampling.LANCZOS,
             )
 
             tk_img = ImageTk.PhotoImage(img)
@@ -236,7 +238,7 @@ class Board(ttk.Frame):
         except FileNotFoundError:
             print(f"Image not found at {img_path}. Please check the path.")
             return
-        
+
         self._image_refs[board][cell] = tk_img
         self._canvas.itemconfigure(
             self._symbol_ids[board][cell], image=self._image_refs[board][cell]
