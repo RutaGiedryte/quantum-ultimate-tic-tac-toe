@@ -169,7 +169,6 @@ class App:
 
         #Touch cell to update the visuals
         partial_trace = self._game.get_partial_trace(board, cell)
-        print(partial_trace)
         self._board.touch_cell(board, cell, partial_trace)
 
         # display move selection if no more moves this turn

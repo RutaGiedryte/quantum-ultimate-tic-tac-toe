@@ -35,6 +35,7 @@ class Board(ttk.Frame):
 
         self._callback = callback
         self._ultimate = ultimate
+        self._n_boards = 9 if ultimate else 1
 
         self._board_width = width / 3 if ultimate else width
 
@@ -66,34 +67,30 @@ class Board(ttk.Frame):
                     )
 
         # list of enabled cells
-        self._enabled = [[False for _ in range(9)] for _ in range(9 if ultimate else 1)]
+        self._enabled = [[False for _ in range(9)] for _ in range(self._n_boards)]
 
         # list of entanglement lines
         self._entanglement_ids = []
 
-        # Make the image of a standard bloch sphere
-        cwd = getcwd()
-        plot_bloch_vector([1, 0, 0], coord_type="spherical").savefig(
-            path.join(cwd, "src", "Images", "Bloch_-1.png"), transparent=True
-        )
-        self._default_image = ImageTk.PhotoImage(
-            Image.open(path.join(cwd, "src", "Images", "Bloch_-1.png")).resize(
-                (width // 3, width // 3), Image.Resampling.LANCZOS
-            )
-        )
+        # Load the standard images
+        self._default_bloch = self.import_img(width, "Bloch_-1.png")
+        self._cross_img = self.import_img(width, "X.png")
+        self._circle_img = self.import_img(width, "O.png")
 
+        # Insert the default bloch images and save their ids
         self._symbol_ids = [
             [
                 self._canvas.create_image(
-                    self._index_to_pos(b, c), anchor="center", image=self._default_image
+                    self._index_to_pos(b, c), anchor="center", image=self._default_bloch
                 )
                 for c in range(9)
             ]
-            for b in range(9 if ultimate else 1)
+            for b in range(self._n_boards)
         ]
 
-        self.__image_refs = [
-            [self._default_image for c in range(9)] for b in range(9 if ultimate else 1)
+        # Save references to the images so they don't get garbage collected
+        self._image_refs = [
+            [self._default_bloch for c in range(9)] for b in range(self._n_boards)
         ]
 
         # lower the tag so the images don't get in the way of clicking on the canvas
@@ -102,6 +99,26 @@ class Board(ttk.Frame):
                 self._canvas.tag_lower(id)
 
         self.bind("<Configure>", self._on_resize)
+
+    def import_img(self, width: int, name: str):
+        """Imports the desired image
+
+        Args:
+            width: width and height of the board
+            name: name of the image to be imported
+        """
+
+        try:
+            img_path = path.join(getcwd(), "src", "Images", name)
+            return ImageTk.PhotoImage(
+                Image.open(img_path).resize(
+                    (width // 3, width // 3), Image.Resampling.LANCZOS
+                )
+            )
+        except FileNotFoundError:
+            print(f"Image not found at {img_path}. Please check the path.")
+            return
+        
 
     def entangle(self, c_board: int, c_cell: int, t_board: int, t_cell: int) -> None:
         """Create arrow from control to target.
@@ -159,11 +176,10 @@ class Board(ttk.Frame):
         Clears cell symbols. Deletes entanglement lines.
         """
 
-        # clear symbols
-
+        # reset symbols to default bloch
         for symbols in self._symbol_ids:
             for symbol in symbols:
-                self._canvas.itemconfigure(symbol, image=self._default_image)
+                self._canvas.itemconfigure(symbol, image=self._default_bloch)
 
         # delete lines
         self._canvas.delete(*self._entanglement_ids)
@@ -181,45 +197,16 @@ class Board(ttk.Frame):
 
         self.reset()
 
-        print("SRS-2: update_display")
-
         for i in range(9):
             if states[i] == State.X:
-                try:
-                    cwd = getcwd()
-                    img_path = path.join(cwd, "src", "Images", "X.png")
-                    img = Image.open(img_path).resize(
-                        (500 // 3, 500 // 3), Image.Resampling.LANCZOS
-                    )
-                    tk_img = ImageTk.PhotoImage(img)
-                except FileNotFoundError:
-                    print(f"Image not found at {img_path}. Please check the path.")
-                    return
+                tk_img = self._cross_img
             elif states[i] == State.O:
-                try:
-                    cwd = getcwd()
-                    img_path = path.join(cwd, "src", "Images", "O.png")
-                    img = Image.open(img_path).resize(
-                        (500 // 3, 500 // 3), Image.Resampling.LANCZOS
-                    )
-                    tk_img = ImageTk.PhotoImage(img)
-                except FileNotFoundError:
-                    print(f"Image not found at {img_path}. Please check the path.")
-                    return
+                tk_img = self._circle_img
             else:
-                try:
-                    cwd = getcwd()
-                    img_path = path.join(cwd, "src", "Images", "Bloch_-1.png")
-                    img = Image.open(img_path).resize(
-                        (500 // 3, 500 // 3), Image.Resampling.LANCZOS
-                    )
-                    tk_img = ImageTk.PhotoImage(img)
-                except FileNotFoundError:
-                    print(f"Image not found at {img_path}. Please check the path.")
-                    return
-            self.__image_refs[board][i] = tk_img
+                tk_img = self._default_bloch
+            self._image_refs[board][i] = tk_img
             self._canvas.itemconfigure(
-                self._symbol_ids[board][i], image=self.__image_refs[board][i]
+                self._symbol_ids[board][i], image=self._image_refs[board][i]
             )
 
     def touch_cell(self, board: int, cell: int, reduced_state: DensityMatrix) -> None:
@@ -231,26 +218,28 @@ class Board(ttk.Frame):
             board: board index
             cell: cell index
         """
-        print("SRS-2: touch_cell")
+        
         try:
-            cwd = getcwd()
-            img_path = path.join(cwd, "src", "Images", f"Bloch_{cell}.png")
-
-            # Generate a new bloch image
+            img_path = path.join(getcwd(), "src", "Images", f"Bloch_{cell}.png")
             theta, phi = get_theta_and_phi(reduced_state)
+
             plot_bloch_vector([1, theta, phi], coord_type="spherical").savefig(
                 path.join(img_path), transparent=True
             )
+
             img = Image.open(img_path).resize(
-                (500 // 3, 500 // 3), Image.Resampling.LANCZOS
+                (self._board_width // 3, self._board_width // 3), Image.Resampling.LANCZOS
             )
+
             tk_img = ImageTk.PhotoImage(img)
+
         except FileNotFoundError:
             print(f"Image not found at {img_path}. Please check the path.")
             return
-        self.__image_refs[board][cell] = tk_img
+        
+        self._image_refs[board][cell] = tk_img
         self._canvas.itemconfigure(
-            self._symbol_ids[board][cell], image=self.__image_refs[board][cell]
+            self._symbol_ids[board][cell], image=self._image_refs[board][cell]
         )
 
     def _index_to_pos(self, board: int, cell: int) -> tuple[float, float]:
@@ -374,10 +363,6 @@ class Board(ttk.Frame):
         # scale symbols
         self._font_size = int(self._board_width / 4)
         font = (self._font, self._font_size)
-
-        # for symbols in self._symbol_ids:
-        #     for id in symbols:
-        #         self._canvas.itemconfigure(id, font=font)
 
         # scale entanglement line width
         for id in self._entanglement_ids:
