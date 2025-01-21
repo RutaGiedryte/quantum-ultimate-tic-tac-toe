@@ -1,110 +1,9 @@
-from enum import Enum
 from qiskit import QuantumCircuit, generate_preset_pass_manager
 from qiskit.transpiler import CouplingMap
 from qiskit.providers import BackendV2
 from qiskit_ibm_runtime import SamplerV2
-from qiskit.quantum_info import Statevector, partial_trace, DensityMatrix
-from typing import Any
-import numpy as np
-
-
-class Axis(Enum):
-    """Rotation axis."""
-
-    X = 0
-    Y = 1
-    Z = 2
-
-
-class Move(Enum):
-    """Possible moves."""
-
-    RX = "x", "x-rotation", 1
-    RY = "y", "y-rotation", 1
-    RZ = "z", "z-rotation", 1
-    CRX = "cx", "controlled x-rotation", 2
-    CRY = "cy", "controlled y-rotation", 2
-    CRZ = "cz", "controlled z-rotation", 2
-    COLLAPSE = "c", "collapse", 1
-
-    def __init__(self, key: str, description: str, min_empty: int) -> None:
-        """Construct move.
-
-        Args:
-            key: short identifier for the move
-            description: move description
-            min_empty: min. number of empty cells required for the movec
-        """
-
-        self._key = key
-        self._description = description
-        self._min_empty = min_empty
-
-    @property
-    def key(self):
-        return self._key
-
-    @property
-    def description(self):
-        return self._description
-
-    @property
-    def min_empty(self):
-        return self._min_empty
-
-    def get_axis(self) -> Axis:
-        """Get the rotation axis of the move.
-
-        Returns:
-            rotation axis iff rotation move
-
-        Raises:
-            ValueError: if not a rotation move
-        """
-
-        match self:
-            case Move.RX | Move.CRX:
-                return Axis.X
-            case Move.RY | Move.CRY:
-                return Axis.Y
-            case Move.RZ | Move.CRZ:
-                return Axis.Z
-            case Move.COLLAPSE:
-                raise ValueError
-
-    def __eq__(self, other: Any) -> bool:
-        """Check equality based on `key`."""
-
-        if type(self) is not type(other):
-            return False
-
-        return self._key == other._key
-
-    def __hash__(self) -> int:
-        return hash(self._key)
-
-
-class State(Enum):
-    """State of a cell on board, or the winner of a game."""
-
-    EMPTY = 0
-    X = 1
-    O = 2
-    DRAW = 3
-    Z_BLOCKED = 4
-
-    def __str__(self) -> str:
-        match self:
-            case State.EMPTY:
-                return " "
-            case State.X:
-                return "X"
-            case State.O:
-                return "O"
-            case State.DRAW:
-                return "draw"
-            case State.Z_BLOCKED:
-                return "z"
+from backend.math import rotate_vec
+from backend.enums import State, Move, Axis
 
 
 def fully_connected_81_coupling():
@@ -186,6 +85,10 @@ class QuantumTicTacToe:
         self._entangled_boards = {i: set() for i in range(self._n_boards)}
         # available boards
         self._available_boards = {i for i in range(self._n_boards)}
+        # state vectors
+        self._state_vectors = [
+            [[0, 0, 1] for _ in range(9)] for _ in range(self._n_boards)
+        ]
 
     def has_control(self) -> bool:
         """Check if control qubit has been set.
@@ -370,6 +273,9 @@ class QuantumTicTacToe:
 
             cell = i % 9
 
+            # reset state vector
+            self._state_vectors[board][cell] = [0, 0, 1]
+
             # position already taken
             if self._boards[board][cell] in [State.X, State.O]:
                 continue
@@ -464,6 +370,11 @@ class QuantumTicTacToe:
 
         self._moves_left_in_turn -= 1
 
+        # rotate state vector
+        self._state_vectors[board][cell] = rotate_vec(
+            self._state_vectors[board][cell], angle, axis
+        )
+
         if self._moves_left_in_turn == 0:
             return self._increase_turns()
         return set()
@@ -542,16 +453,25 @@ class QuantumTicTacToe:
 
         self._touch_cell(board, cell)
 
+        # rotate state vector
+        self._state_vectors[board][cell] = rotate_vec(
+            self._state_vectors[board][cell], angle, axis
+        )
+
         return self._increase_turns()
 
-    def get_statevector(self) -> Statevector:
-        return Statevector(self._qc)
+    def get_statevector(self, board, cell) -> list[int]:
+        """Get the state vector of `cell` on `board`.
 
-    def get_partial_trace(self, board: int, cell: int) -> DensityMatrix:
-        state = self.get_statevector()
-        return partial_trace(
-            state, [i for i in range(81 if self._ultimate else 9) if i != cell]
-        )
+        Args:
+            board: board index
+            cell: cell index
+
+        Returns:
+            state vector
+        """
+
+        return self._state_vectors[board][cell]
 
     def circuit_string(self):
         """Get string representation of the circuit."""
@@ -560,7 +480,7 @@ class QuantumTicTacToe:
 
     def _touch_cell(self, board: int, cell: int) -> None:
         """Add cell to list of active cells.
-        
+
         Removes the board from the list of available boards if there is more than one board available.
 
         Args:
@@ -664,22 +584,3 @@ class QuantumTicTacToe:
         if winner == State.EMPTY:
             return State.DRAW if full else State.EMPTY
         return winner
-
-
-def get_theta_and_phi(reduced_state):
-    """ "Retrieves the theta and phi from the reduced state of a single qubit
-
-    Args:
-        reduced_state: The partial trace of the Systemvector where all qubits but one have been removed
-
-    Returns:
-        theta: float, representing the polar angle of the qubit in the Bloch sphere
-        phi: float, representing the azimuth angle of the qubit in the Bloch sphere
-    """
-    rx = np.real(reduced_state.data[0][1] + reduced_state.data[1][0])
-    ry = np.imag(reduced_state.data[1][0] - reduced_state.data[0][1])
-    rz = reduced_state.data[0][0] - reduced_state.data[1][1]
-    theta = np.arccos(rz)
-    phi = np.arctan2(ry, rx)
-
-    return theta, phi

@@ -180,9 +180,8 @@ class App:
                 collapsed = self._game.collapse(board)
                 self._collapse_label.grid_forget()
 
-        #Touch cell to update the visuals
-        partial_trace = self._game.get_partial_trace(board, cell)
-        self._board.touch_cell(board, cell, partial_trace)
+        # Touch cell to update the visuals
+        self._board.touch_cell(board, cell, self._game.get_statevector(board, cell))
 
         # display move selection if no more moves this turn
         if not self._game.has_moves():
@@ -268,26 +267,13 @@ class App:
 
         self._selected_move = Move.COLLAPSE
 
-        self._enable_boards()
-
         # let player choose board when ultimate
         if self._ultimate:
             self._move_selection.grid_forget()
             self._collapse_label.grid()
-            return
-
-        # collapse and update boards
-        self._game.collapse()
-        self._update_boards({0})
-
-        # disable boards
-        self._disable_boards()
-
-        end = self._check_end()
-
-        if not end:
-            self._change_turn()
-            self._show_move_selection()
+            self._enable_boards()
+        else:
+            self._click_cell(0, 0)
 
     def _select_number_of_qubits(self, n: int) -> None:
         """Callback function for selecting the number of qubits to rotate.
