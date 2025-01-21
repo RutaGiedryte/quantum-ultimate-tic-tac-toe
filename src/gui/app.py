@@ -141,8 +141,6 @@ class App:
 
         collapsed = set()
 
-        self._board.touch_cell(board, cell)
-
         self._disable_boards()
 
         match self._selected_move:
@@ -181,6 +179,10 @@ class App:
             case Move.COLLAPSE:
                 collapsed = self._game.collapse(board)
                 self._collapse_label.grid_forget()
+
+        #Touch cell to update the visuals
+        partial_trace = self._game.get_partial_trace(board, cell)
+        self._board.touch_cell(board, cell, partial_trace)
 
         # display move selection if no more moves this turn
         if not self._game.has_moves():
