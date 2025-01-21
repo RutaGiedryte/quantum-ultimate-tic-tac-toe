@@ -2,7 +2,9 @@ from enum import Enum
 from qiskit import QuantumCircuit, generate_preset_pass_manager
 from qiskit.providers import BackendV2
 from qiskit_ibm_runtime import SamplerV2
+from qiskit.quantum_info import Statevector, partial_trace, DensityMatrix
 from typing import Any
+import numpy as np
 
 
 class Axis(Enum):
@@ -471,6 +473,15 @@ class QuantumTicTacToe:
 
         return self._increase_turns()
 
+    def get_statevector(self) -> Statevector:
+        return Statevector(self._qc)
+
+    def get_partial_trace(self, board: int, cell: int) -> DensityMatrix:
+        state = self.get_statevector()
+        return partial_trace(
+            state, [i for i in range(81 if self._ultimate else 9) if i != cell]
+        )
+
     def circuit_string(self):
         """Get string representation of the circuit."""
 
@@ -542,3 +553,22 @@ class QuantumTicTacToe:
         if winner == State.EMPTY:
             return State.DRAW if full else State.EMPTY
         return winner
+
+
+def get_theta_and_phi(reduced_state):
+    """ "Retrieves the theta and phi from the reduced state of a single qubit
+
+    Args:
+        reduced_state: The partial trace of the Systemvector where all qubits but one have been removed
+
+    Returns:
+        theta: float, representing the polar angle of the qubit in the Bloch sphere
+        phi: float, representing the azimuth angle of the qubit in the Bloch sphere
+    """
+    rx = np.real(reduced_state.data[0][1] + reduced_state.data[1][0])
+    ry = np.imag(reduced_state.data[1][0] - reduced_state.data[0][1])
+    rz = reduced_state.data[0][0] - reduced_state.data[1][1]
+    theta = np.arccos(rz)
+    phi = np.arctan2(ry, rx)
+
+    return theta, phi

@@ -131,8 +131,6 @@ class App:
 
         collapsed = False
 
-        self._board.touch_cell(board, cell)
-
         self._disable_boards()
 
         match self._selected_move:
@@ -168,6 +166,10 @@ class App:
                     self._game.rotate_control(board, cell)
                     self._angle_selection.set_message("Choose target qubit")
                     self._enable_boards()
+
+        #Touch cell to update the visuals
+        partial_trace = self._game.get_partial_trace(board, cell)
+        self._board.touch_cell(board, cell, partial_trace)
 
         # display move selection if no more moves this turn
         if not self._game.has_moves():
