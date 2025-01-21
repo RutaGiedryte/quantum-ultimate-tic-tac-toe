@@ -472,14 +472,15 @@ class QuantumTicTacToe:
         self._boards[board][cell] = State.Z_BLOCKED
 
         return self._increase_turns()
-    
+
     def get_statevector(self) -> Statevector:
-        return State(self._qc)
+        return Statevector(self._qc)
 
     def get_partial_trace(self, board: int, cell: int) -> DensityMatrix:
         state = self.get_statevector()
-        return partial_trace(state, 
-            [i for i in range(81 if self._ultimate else 9) if i != cell])
+        return partial_trace(
+            state, [i for i in range(81 if self._ultimate else 9) if i != cell]
+        )
 
     def circuit_string(self):
         """Get string representation of the circuit."""
@@ -553,8 +554,9 @@ class QuantumTicTacToe:
             return State.DRAW if full else State.EMPTY
         return winner
 
+
 def get_theta_and_phi(reduced_state):
-    """"Retrieves the theta and phi from the reduced state of a single qubit
+    """ "Retrieves the theta and phi from the reduced state of a single qubit
 
     Args:
         reduced_state: The partial trace of the Systemvector where all qubits but one have been removed
@@ -568,3 +570,5 @@ def get_theta_and_phi(reduced_state):
     rz = reduced_state.data[0][0] - reduced_state.data[1][1]
     theta = np.arccos(rz)
     phi = np.arctan2(ry, rx)
+
+    return theta, phi
