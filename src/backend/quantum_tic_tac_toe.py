@@ -128,6 +128,7 @@ def get_fair_bitstring(counts, threshold, total) -> str:
 
 def run_circuit(qc, backend, shots) -> dict:
     qc.measure_all()
+    # Does increasing the optimization_level result in different results?
     pm = generate_preset_pass_manager(backend=backend, optimization_level=0)
     isa_circuit = pm.run(qc)
     sampler = SamplerV2(mode=backend)
@@ -331,6 +332,7 @@ class QuantumTicTacToe:
                 counts = run_circuit(val, self._backend, 1)
                 results[key] = list(counts.keys())[0]
             else:
+                # Maybe optimize that we only run the x-basis for the qubits that are 1 in the z-basis?
                 result_string = ""
                 dag = circuit_to_dag(val)
                 seperated = dag.separable_circuits(remove_idle_qubits=True)
@@ -339,12 +341,12 @@ class QuantumTicTacToe:
                     if qc.num_qubits <= 0:
                         result_string += str(0)
                         continue
-                    # What does changing the optimization_level do?
+                    # We can change the count if we want...
                     counts = run_circuit(qc=qc, backend=self._backend, shots=2 ** (qc.num_qubits + 3))
-                    # Make sure to change the three here as well...
                     bitstring = get_fair_bitstring(counts, 0.05, 2 ** (qc.num_qubits + 3))
                     result_string += str(bitstring)
-                results[key] = result_string
+                # Reverse the string because Qiskit does so as well...
+                results[key] = result_string[::-1]
 
         # update board
         for i in range(self._n_bits):

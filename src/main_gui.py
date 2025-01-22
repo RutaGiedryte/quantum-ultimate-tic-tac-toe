@@ -24,12 +24,12 @@ def main():
     ultimate = False
 
     if service:
+        # noinspection PyUnresolvedReferences
         backend = service.least_busy(
             simulator=False, operational=True, min_num_qubits=81 if ultimate else 9
         )
     else:
-        # backend = FakeSherbrooke()
-        backend = AerSimulator() # use non-noisy simulator
+        backend = AerSimulator()  # use non-noisy simulator
 
     App(root, ultimate=ultimate, moves=moves, backend=backend)
 
