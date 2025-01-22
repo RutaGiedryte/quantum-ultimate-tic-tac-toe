@@ -1,9 +1,15 @@
 import random
+
 from enum import Enum
+from typing import Any
+
 from qiskit import QuantumCircuit, generate_preset_pass_manager
 from qiskit.providers import BackendV2
+from qiskit.converters import circuit_to_dag, dag_to_circuit
 from qiskit_ibm_runtime import SamplerV2
-from typing import Any
+
+import warnings  # Qiskit using deprecated internal stuff for dag_to_circuit...
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 class Axis(Enum):
@@ -105,8 +111,8 @@ class State(Enum):
                 return "z"
 
 
-def get_fair_bitstring(counts, threshold):
-    probabilities = {state: count / 1024 for state, count in counts.items()}
+def get_fair_bitstring(counts, threshold, total) -> str:
+    probabilities = {state: count / total for state, count in counts.items()}
     try:
         filtered_probabilities = {state: prob for state, prob in probabilities.items() if prob >= threshold}
         if not filtered_probabilities:
@@ -118,6 +124,20 @@ def get_fair_bitstring(counts, threshold):
     states, probs = zip(*normalized_probabilities.items())
     chosen_state = random.choices(states, weights=probs, k=1)[0]
     return chosen_state
+
+
+def run_circuit(qc, backend, shots) -> dict:
+    qc.measure_all()
+    pm = generate_preset_pass_manager(backend=backend, optimization_level=3)
+    isa_circuit = pm.run(qc)
+    sampler = SamplerV2(mode=backend)
+    job = sampler.run([isa_circuit], shots=shots)
+    result = job.result()
+    try:
+        counts = getattr(result[0].data, qc.cregs[0].name, None).get_counts()
+    except AttributeError:
+        raise SystemError("Empty or invalid result..")  # Handle this?
+    return counts
 
 
 class QuantumTicTacToe:
@@ -306,25 +326,23 @@ class QuantumTicTacToe:
 
         # run circuit
         for key, val in qcs.items():
-            val.measure_all()
-            # Does optimization give more errors / remove quantum aspects?
-            pm = generate_preset_pass_manager(backend=self._backend, optimization_level=3)
-            isa_circuit = pm.run(val)
-            sampler = SamplerV2(mode=self._backend)
             if self._backend.name == "aer_simulator":
-                job = sampler.run([isa_circuit], shots=1)
-            else:
-                job = sampler.run([isa_circuit], shots=1024)
-            result = job.result()
-            try:
-                counts = getattr(result[0].data, val.cregs[0].name, None).get_counts()
-            except AttributeError:
-                raise SystemError("Empty or invalid result..")  # Handle this?
-            if self._backend.name == "aer_simulator":
+                # Does optimization give more errors / remove quantum aspects?
+                counts = run_circuit(val, self._backend, 1)
+                print(type(list(counts.keys())[0]))
                 results[key] = list(counts.keys())[0]
             else:
-                # Make sure we don't lose the quantum aspect but remove the noise
-                results[key] = get_fair_bitstring(counts, 0.05)
+                result_string = ""
+                dag = circuit_to_dag(val)
+                seperated = dag.separable_circuits(True)
+                for i in seperated:
+                    qc = dag_to_circuit(i)
+                    # What does changing the optimization_level do?
+                    counts = run_circuit(qc, self._backend, 2 ** (qc.num_qubits + 3))
+                    # Make sure to change the three here as well...
+                    bitstring = get_fair_bitstring(counts, 0.05, 2 ** (qc.num_qubits + 3))
+                    result_string += str(bitstring)
+                results[key] = result_string
 
         # update board
         for i in range(self._n_bits):
