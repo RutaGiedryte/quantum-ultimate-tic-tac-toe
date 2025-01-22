@@ -142,9 +142,9 @@ class QuantumTicTacToe:
         """
 
         allowed = [State.EMPTY]
-        # allow z_blocked cells if move is not z-rotation
+        # allow entangled cells if move is not z-rotation
         if move != Move.RZ:
-            allowed.append(State.Z_BLOCKED)
+            allowed.append(State.ENTANGLED)
 
         return [
             i
@@ -280,8 +280,8 @@ class QuantumTicTacToe:
             if self._boards[board][cell] in [State.X, State.O]:
                 continue
 
-            # unblock z-rotation
-            if self._boards[board][cell] == State.Z_BLOCKED:
+            # unmark cell as entangled
+            if self._boards[board][cell] == State.ENTANGLED:
                 self._boards[board][cell] = State.EMPTY
 
             # set symbol if measured 1 in z-basis
@@ -350,8 +350,8 @@ class QuantumTicTacToe:
             "Cannot rotate non-empty cell"
         )
         if axis == Axis.Z:
-            assert self._boards[board][cell] != State.Z_BLOCKED, (
-                "Cannot z-rotate z-blocked cell"
+            assert self._boards[board][cell] != State.ENTANGLED, (
+                "Cannot z-rotate entangled cell"
             )
 
         qubit = board * 9 + cell
@@ -394,7 +394,7 @@ class QuantumTicTacToe:
         self._c_board = board
         self._c_cell = cell
 
-        self._boards[board][cell] = State.Z_BLOCKED
+        self._boards[board][cell] = State.ENTANGLED
 
         self._moves_left_in_turn = 1
 
@@ -448,8 +448,8 @@ class QuantumTicTacToe:
 
         self._moves_left_in_turn = 0
 
-        # block z-rotation
-        self._boards[board][cell] = State.Z_BLOCKED
+        # mark cell as entangled
+        self._boards[board][cell] = State.ENTANGLED
 
         self._touch_cell(board, cell)
 
@@ -470,6 +470,9 @@ class QuantumTicTacToe:
         Returns:
             state vector
         """
+
+        if self._boards[board][cell] == State.ENTANGLED:
+            return [0, 0, 0]
 
         return self._state_vectors[board][cell]
 
