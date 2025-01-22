@@ -2,11 +2,9 @@ from tkinter import Widget, ttk, Canvas
 from collections.abc import Callable
 from PIL import Image, ImageTk
 from qiskit.visualization import plot_bloch_vector
-from qiskit.quantum_info import DensityMatrix
 import matplotlib.pyplot as plt
 from numpy.exceptions import ComplexWarning
-
-from backend.quantum_tic_tac_toe import State, get_theta_and_phi
+from backend.enums import State
 from os import getcwd, path
 import warnings
 
@@ -45,22 +43,47 @@ class Board(ttk.Frame):
 
         self._board_width = width / 3 if ultimate else width
 
+        n_boards = 9 if ultimate else 1
+
         # font
         self._font = "Roboto"
         self._font_size = int(self._board_width / 4)
+        self._win_font_size = int(self._board_width)
+
+        # bg colours
+        self._cell_disabled_color = "#E0E0E0"
+        self._cell_enabled_color = "#FFFFFF"
 
         # font colour
         self._x_color = "#CB70FF"
         self._o_color = "#44BC68"
+        self._draw_color = "#FFB300"
         self._default_color = "#ABABAB"
 
-        self._canvas = Canvas(self, width=width, height=width)
+        self._canvas = Canvas(self, width=width, height=width, highlightthickness=0)
         self._canvas.bind("<Button-1>", lambda event: self._on_click(event))
         self._canvas.grid()
 
         self._width = width
 
         self._grid_line_ids = []
+
+        # cell backgrounds
+        self._cell_bg_ids = [[] for _ in range(n_boards)]
+        offset = self._board_width / 3 / 2
+
+        for b, cells in enumerate(self._cell_bg_ids):
+            for c in range(9):
+                x_centre, y_centre = self._index_to_pos(b, c)
+                id = self._canvas.create_rectangle(
+                    x_centre - offset,
+                    y_centre - offset,
+                    x_centre + offset,
+                    y_centre + offset,
+                    fill=self._cell_disabled_color,
+                    width=0,
+                )
+                cells.append(id)
 
         # create grid lines
         self._create_grid(width, 0, 0)
@@ -75,13 +98,13 @@ class Board(ttk.Frame):
         # list of enabled cells
         self._enabled = [[False for _ in range(9)] for _ in range(self._n_boards)]
 
-        # list of entanglement lines
-        self._entanglement_ids = []
+        # list of entanglement lines, indexed by control qubit board index
+        self._entanglement_ids = [[] for _ in range(n_boards)]
 
         # Load the standard images
-        self._default_bloch_img = self.import_img("Bloch_-1.png")
-        self._cross_img = self.import_img("X.png")
-        self._circle_img = self.import_img("O.png")
+        self._default_bloch_img = self._import_img("Bloch_-1.png")
+        self._cross_img = self._import_img("X.png")
+        self._circle_img = self._import_img("O.png")
 
         self._default_bloch_img_tk = ImageTk.PhotoImage(self._default_bloch_img)
 
@@ -98,6 +121,16 @@ class Board(ttk.Frame):
             for b in range(self._n_boards)
         ]
 
+        self._win_symbol_ids = [
+            self._canvas.create_text(
+                self._index_to_pos(b, 4),
+                text="",
+                fill=self._draw_color,
+                font=(self._font, self._win_font_size),
+            )
+            for b in range(n_boards)
+        ]
+
         # Save references to the images so they don't get garbage collected
         self._image_refs = [
             [
@@ -107,29 +140,7 @@ class Board(ttk.Frame):
             for b in range(self._n_boards)
         ]
 
-        # lower the tag so the images don't get in the way of clicking on the canvas
-        for list in self._symbol_ids:
-            for id in list:
-                self._canvas.tag_lower(id)
-
         self.bind("<Configure>", self._on_resize)
-
-    def import_img(self, name: str) -> Image.Image:
-        """Imports the desired image.
-
-        Args:
-            name: name of the image to be imported
-
-        Returns:
-            the imported image
-        """
-
-        try:
-            img_path = path.join(getcwd(), "src", "Images", name)
-            return Image.open(img_path)
-        except FileNotFoundError:
-            print(f"Image not found at {img_path}. Please check the path.")
-            raise
 
     def entangle(self, c_board: int, c_cell: int, t_board: int, t_cell: int) -> None:
         """Create arrow from control to target.
@@ -148,7 +159,7 @@ class Board(ttk.Frame):
         color = "#FFA35C"
         arrow_shape = (20, 20, 5)
 
-        self._entanglement_ids.append(
+        self._entanglement_ids[c_board].append(
             self._canvas.create_line(
                 cx,
                 cy,
@@ -171,6 +182,9 @@ class Board(ttk.Frame):
 
         for c in cells:
             self._enabled[board][c] = True
+            self._canvas.itemconfigure(
+                self._cell_bg_ids[board][c], fill=self._cell_enabled_color
+            )
 
     def disable(self, board: int) -> None:
         """Disable `board`.
@@ -181,26 +195,30 @@ class Board(ttk.Frame):
 
         self._enabled[board] = [False for _ in range(9)]
 
-    def reset(self) -> None:
-        """Reset the board to its default state.
+        for id in self._cell_bg_ids[board]:
+            self._canvas.itemconfigure(id, fill=self._cell_disabled_color)
+
+    def reset(self, board) -> None:
+        """Reset the `board` to its default state.
 
         Clears cell symbols. Deletes entanglement lines.
+
+        Args:
+            board: board index
         """
 
         # reset symbols to default bloch
-        for b, list in enumerate(self._image_refs):
-            for c, ref in enumerate(list):
-                width = int(self._board_width / 3)
-                ref["img"] = self._default_bloch_img
-                ref["img_tk"] = ImageTk.PhotoImage(
-                    self._default_bloch_img.resize((width, width))
-                )
-
-                self._canvas.itemconfigure(self._symbol_ids[b][c], image=ref["img_tk"])
+        for cell in range(9):
+            self._set_cell_image(board, cell, self._default_bloch_img)
 
         # delete lines
-        self._canvas.delete(*self._entanglement_ids)
-        self._entanglement_ids = []
+        self._canvas.delete(*self._entanglement_ids[board])
+        self._entanglement_ids[board].clear()
+
+        # clear win symbol
+        self._canvas.itemconfigure(
+            self._win_symbol_ids[board], text="", fill=self._draw_color
+        )
 
     def update_display(self, board: int, states: list[State]) -> None:
         """Update symbols to display on `board`.
@@ -212,7 +230,7 @@ class Board(ttk.Frame):
             states: cell states on board
         """
 
-        self.reset()
+        self.reset(board)
 
         for i in range(9):
             if states[i] == State.X:
@@ -222,14 +240,29 @@ class Board(ttk.Frame):
             else:
                 img = self._default_bloch_img
 
-            width = int(self._board_width / 3)
-            tk_img = ImageTk.PhotoImage(img.resize((width, width)))
+            self._set_cell_image(board, i, img)
 
-            self._image_refs[board][i]["img"] = img
-            self._image_refs[board][i]["img_tk"] = tk_img
-            self._canvas.itemconfigure(self._symbol_ids[board][i], image=tk_img)
+    def set_winner(self, board: int, winner: State) -> None:
+        """Set subboard winner.
 
-    def touch_cell(self, board: int, cell: int, reduced_state: DensityMatrix) -> None:
+        Displays a symbol over the subboard based on the winner.
+
+        Args:
+            board: board index
+            winner: subboard winner
+        """
+
+        id = self._win_symbol_ids[board]
+
+        match winner:
+            case State.X:
+                self._canvas.itemconfigure(id, text="X", fill=self._x_color)
+            case State.O:
+                self._canvas.itemconfigure(id, text="O", fill=self._o_color)
+            case State.DRAW:
+                self._canvas.itemconfigure(id, text="?")
+
+    def touch_cell(self, board: int, cell: int, state_vector: list[int]) -> None:
         """Touch `cell` on `board`.
 
         Changes the representation of the cell.
@@ -237,26 +270,20 @@ class Board(ttk.Frame):
         Args:
             board: board index
             cell: cell index
+            state_vector: state vector of the touched cell
         """
 
         # generate image
-        img_path = path.join(getcwd(), "src", "Images", f"Bloch_{cell}.png")
-        theta, phi = get_theta_and_phi(reduced_state)
+        img_path = path.join(getcwd(), "src", "Images", f"Bloch_{board}_{cell}.png")
 
-        plot_bloch_vector([1, theta, phi], coord_type="spherical").savefig(
+        plot_bloch_vector(state_vector).savefig(
             path.join(img_path), transparent=True, dpi=50
         )
         plt.close()
 
         # display image
-        width = int(self._board_width / 3)
-        img = self.import_img(f"Bloch_{cell}.png")
-        tk_img = ImageTk.PhotoImage(img.resize((width, width)))
-
-        self._image_refs[board][cell]["img"] = img
-        self._image_refs[board][cell]["img_tk"] = tk_img
-
-        self._canvas.itemconfigure(self._symbol_ids[board][cell], image=tk_img)
+        img = self._import_img(f"Bloch_{board}_{cell}.png")
+        self._set_cell_image(board, cell, img)
 
     def _index_to_pos(self, board: int, cell: int) -> tuple[float, float]:
         """Calculate cell positon on canvas from board and cell index.
@@ -284,6 +311,45 @@ class Board(ttk.Frame):
         y = board_y_index * board_offset + cell_start + cell_y_index * cell_offset
 
         return (x, y)
+
+    def _set_cell_image(self, board, cell, img) -> None:
+        """Set the image of `cell` on `board`.
+
+        The image will be resized to be the same size as the cell.
+
+        Args:
+            board: board index
+            cell: cell index
+            img: image set the cell to
+        """
+
+        width = int(self._board_width / 3)
+        tk_img = ImageTk.PhotoImage(img.resize((width, width)))
+
+        self._image_refs[board][cell]["img"] = img
+        self._image_refs[board][cell]["img_tk"] = tk_img
+
+        self._canvas.itemconfigure(self._symbol_ids[board][cell], image=tk_img)
+
+    def _import_img(self, name: str) -> Image.Image:
+        """Imports the desired image.
+
+        Args:
+            name: name of the image to import
+
+        Returns:
+            the imported image
+
+        Raises:
+            FileNotFoundError: if the image was not found
+        """
+
+        try:
+            img_path = path.join(getcwd(), "src", "Images", name)
+            return Image.open(img_path)
+        except FileNotFoundError:
+            print(f"Image not found at {img_path}. Please check the path.")
+            raise
 
     def _pos_to_index(self, x: float, y: float) -> tuple[int, int]:
         """Calculate board and cell index from position on canvas.
@@ -376,22 +442,26 @@ class Board(ttk.Frame):
         # scale all objects on canvas
         self._canvas.scale("all", 0, 0, scale, scale)
 
-        # scale symbols
-        self._font_size = int(self._board_width / 4)
-        font = (self._font, self._font_size)
+        # scale win symbols
+        self._win_font_size = int(self._board_width)
+        font = (self._font, self._win_font_size)
+
+        for id in self._win_symbol_ids:
+            self._canvas.itemconfigure(id, font=font)
 
         # scale entanglement line width
-        for id in self._entanglement_ids:
-            width = float(self._canvas.itemcget(id, "width")) * scale
-            arrow_shape = self._canvas.itemcget(id, "arrowshape").split()
+        for list in self._entanglement_ids:
+            for id in list:
+                width = float(self._canvas.itemcget(id, "width")) * scale
+                arrow_shape = self._canvas.itemcget(id, "arrowshape").split()
 
-            arrow_shape = (
-                scale * float(arrow_shape[0]),
-                scale * float(arrow_shape[1]),
-                scale * float(arrow_shape[2]),
-            )
+                arrow_shape = (
+                    scale * float(arrow_shape[0]),
+                    scale * float(arrow_shape[1]),
+                    scale * float(arrow_shape[2]),
+                )
 
-            self._canvas.itemconfigure(id, width=width, arrowshape=arrow_shape)
+                self._canvas.itemconfigure(id, width=width, arrowshape=arrow_shape)
 
         # scale grid line width
         for id in self._grid_line_ids:
@@ -399,13 +469,6 @@ class Board(ttk.Frame):
             self._canvas.itemconfigure(id, width=width)
 
         # scale images
-        new_image_width = int(self._board_width / 3)
-
-        for b, list in enumerate(self._image_refs):
-            for c, ref in enumerate(list):
-                ref["img_tk"] = ImageTk.PhotoImage(
-                    ref["img"].resize(
-                        (new_image_width, new_image_width), Image.Resampling.BILINEAR
-                    )
-                )
-                self._canvas.itemconfigure(self._symbol_ids[b][c], image=ref["img_tk"])
+        for board in range(self._n_boards):
+            for cell in range(9):
+                self._set_cell_image(board, cell, self._image_refs[board][cell]["img"])

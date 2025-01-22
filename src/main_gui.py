@@ -3,8 +3,14 @@ from gui.app import App
 from backend.quantum_tic_tac_toe import Move
 from qiskit_aer import AerSimulator
 from qiskit_ibm_runtime.fake_provider import FakeSherbrooke
+from qiskit_ibm_runtime import QiskitRuntimeService
+from backend.parser import create_parser
+
 
 def main():
+    parser = create_parser("qttt")
+    args = parser.parse_args()
+
     root = Tk()
     root.title("Quantum Tic-Tac-Toe")
     root.geometry("700x700")
@@ -13,12 +19,11 @@ def main():
     # quit with escape
     root.bind("<Escape>", lambda x: root.destroy())
 
-    service = None
-    # service = QiskitRuntimeService()
+    service = QiskitRuntimeService() if args.ibm else None
 
     moves = [Move.RY, Move.RZ, Move.CRX, Move.COLLAPSE]
 
-    ultimate = False
+    ultimate = args.ultimate
 
     if service:
         backend = service.least_busy(
@@ -26,8 +31,7 @@ def main():
         )
     else:
         # backend = FakeSherbrooke()
-        backend = AerSimulator() # use non-noisy simulator
-
+        backend = AerSimulator(method="matrix_product_state")  # use non-noisy simulator
 
     App(root, ultimate=ultimate, moves=moves, backend=backend)
 

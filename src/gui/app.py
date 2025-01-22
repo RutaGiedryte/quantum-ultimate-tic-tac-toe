@@ -24,10 +24,13 @@ class App:
         """
 
         self._moves = moves
+        self._ultimate = ultimate
 
         # style
         style = ttk.Style()
         style.configure("TopInfo.TLabel", font=("Roboto", 20))
+        style.configure(".", background="#E0E0E0")
+        style.configure("TButton", background="#F5F5F5")
 
         # create game
         self._game = QuantumTicTacToe(backend, math.pi / 2, math.pi, 10, ultimate)
@@ -121,6 +124,13 @@ class App:
         self._reset_button.grid(row=buttons_row, column=0, sticky="S")
         self._reset_button.grid_forget()
 
+        # create collapse label
+        self._collapse_label = ttk.Label(
+            mainframe, text="Choose a board to collapse", padding=row_padding
+        )
+        self._collapse_label.grid(row=buttons_row, column=0)
+        self._collapse_label.grid_forget()
+
     def _click_cell(self, board: int, cell: int) -> None:
         """Callback function for clicking on cell `cell` of board `board`.
 
@@ -129,7 +139,7 @@ class App:
             board: board index
         """
 
-        collapsed = False
+        collapsed = set()
 
         self._disable_boards()
 
@@ -166,10 +176,12 @@ class App:
                     self._game.rotate_control(board, cell)
                     self._angle_selection.set_message("Choose target qubit")
                     self._enable_boards()
+            case Move.COLLAPSE:
+                collapsed = self._game.collapse(board)
+                self._collapse_label.grid_forget()
 
-        #Touch cell to update the visuals
-        partial_trace = self._game.get_partial_trace(board, cell)
-        self._board.touch_cell(board, cell, partial_trace)
+        # Touch cell to update the visuals
+        self._board.touch_cell(board, cell, self._game.get_statevector(board, cell))
 
         # display move selection if no more moves this turn
         if not self._game.has_moves():
@@ -177,8 +189,8 @@ class App:
             self._change_turn()
 
         #  updated board if collapsed and check for end
-        if collapsed:
-            self._update_boards()
+        if len(collapsed):
+            self._update_boards(collapsed)
             self._check_end()
 
     def _rotate(self, axis: Axis) -> None:
@@ -253,18 +265,15 @@ class App:
     def _collapse(self) -> None:
         """Callback function for clicking collapse move button."""
 
-        # collapse and update boards
-        self._game.collapse()
-        self._update_boards()
+        self._selected_move = Move.COLLAPSE
 
-        # disable boards
-        self._disable_boards()
-
-        end = self._check_end()
-
-        if not end:
-            self._change_turn()
-            self._show_move_selection()
+        # let player choose board when ultimate
+        if self._ultimate:
+            self._move_selection.grid_forget()
+            self._collapse_label.grid()
+            self._enable_boards()
+        else:
+            self._click_cell(0, 0)
 
     def _select_number_of_qubits(self, n: int) -> None:
         """Callback function for selecting the number of qubits to rotate.
@@ -328,12 +337,22 @@ class App:
         for i in range(self._n_boards):
             self._board.disable(i)
 
-    def _update_boards(self) -> None:
-        """Update all boards."""
+    def _update_boards(self, boards: set[int]) -> None:
+        """Update `boards`.
 
-        for i in range(self._n_boards):
+        Args:
+            boards: set of board indices to update
+        """
+
+        for i in boards:
             board_state = self._game.board(i)
             self._board.update_display(i, board_state)
+
+            # check if subboard is finished when ultimate
+            if self._ultimate:
+                winner = self._game.check_win(i)
+                if winner != State.EMPTY:
+                    self._board.set_winner(i, winner)
 
     def _change_turn(self) -> None:
         """Change turn."""
@@ -385,8 +404,9 @@ class App:
         # reset game
         self._game.reset()
 
-        # reset board
-        self._board.reset()
+        # reset boards
+        for i in range(self._n_boards):
+            self._board.reset(i)
 
         # hide again button
         self._reset_button.grid_forget()

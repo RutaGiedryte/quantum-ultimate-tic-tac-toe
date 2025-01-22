@@ -1,7 +1,9 @@
 import math
 from qiskit_ibm_runtime.fake_provider import FakeSherbrooke
+from qiskit_ibm_runtime import QiskitRuntimeService
 from backend.quantum_tic_tac_toe import Axis, QuantumTicTacToe, State, Move
 from qiskit_aer import AerSimulator
+from backend.parser import create_parser
 
 
 def print_board(board: list[State]):
@@ -136,7 +138,7 @@ def rotate(game: QuantumTicTacToe, axis: Axis) -> bool:
 
     used = set()
 
-    collapsed = False
+    collapsed = set()
 
     for _ in range(n):
         # get position
@@ -153,11 +155,11 @@ def rotate(game: QuantumTicTacToe, axis: Axis) -> bool:
         remaining_rotation -= abs(angle)
 
         # add rotation gate
-        collapsed = collapsed or game.rotate(0, pos, axis, angle, n)
+        collapsed.update(game.rotate(0, pos, axis, angle, n))
 
         used.add(pos)
 
-    return collapsed
+    return len(collapsed) != 0
 
 
 def rotate_controlled(game: QuantumTicTacToe, axis: Axis) -> bool:
@@ -200,7 +202,7 @@ def rotate_controlled(game: QuantumTicTacToe, axis: Axis) -> bool:
     )
 
     # set target qubit
-    return game.rotate_target(0, target, axis, angle)
+    return len(game.rotate_target(0, target, axis, angle)) != 0
 
 
 def qttt_cli(ultimate: bool, moves: list[Move], backend):
@@ -275,12 +277,14 @@ def qttt_cli(ultimate: bool, moves: list[Move], backend):
 
 
 def main():
-    service = None
-    # service = QiskitRuntimeService()
+    parser = create_parser("qttt-cli")
+    args = parser.parse_args()
+
+    service = QiskitRuntimeService() if args.ibm else None
 
     moves = [Move.RY, Move.RZ, Move.CRX, Move.COLLAPSE]
 
-    ultimate = False
+    ultimate = args.ultimate
 
     # set backend
     if service:
@@ -289,7 +293,7 @@ def main():
         )
     else:
         # backend = FakeSherbrooke()
-        backend = AerSimulator() # use non-noisy simulation
+        backend = AerSimulator()  # use non-noisy simulation
 
     qttt_cli(ultimate, moves, backend)
 
