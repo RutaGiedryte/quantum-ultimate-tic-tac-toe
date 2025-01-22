@@ -85,7 +85,7 @@ class State(Enum):
     X = 1
     O = 2
     DRAW = 3
-    Z_BLOCKED = 4
+    ENTANGLED = 4
 
     def __str__(self) -> str:
         match self:
@@ -97,5 +97,5 @@ class State(Enum):
                 return "O"
             case State.DRAW:
                 return "draw"
-            case State.Z_BLOCKED:
-                return "z"
+            case State.ENTANGLED:
+                return "e"
