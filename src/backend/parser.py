@@ -17,7 +17,7 @@ def create_parser(prog: str):
         "-u", "--ultimate", action="store_true", help="play ultimate version"
     )
     parser.add_argument(
-        "-s", "--simulate", action="store_true", help="simulate locally"
+        "-i", "--ibm", action="store_true", help="run on IBM quantum computer"
     )
 
     return parser

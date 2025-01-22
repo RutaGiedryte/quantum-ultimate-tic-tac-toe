@@ -424,7 +424,7 @@ class QuantumTicTacToe:
         assert self._c_board != -1 and self._c_cell != -1, (
             "Control qubit has not been selected"
         )
-        assert angle < self._max_controlled_angle, "Angle too large"
+        assert angle <= self._max_controlled_angle, "Angle too large"
         assert self._boards[board][cell] not in [State.X, State.O], "Cell is not empty"
 
         c_qubit = self._c_board * 9 + self._c_cell

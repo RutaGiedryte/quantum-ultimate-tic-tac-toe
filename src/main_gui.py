@@ -19,7 +19,7 @@ def main():
     # quit with escape
     root.bind("<Escape>", lambda x: root.destroy())
 
-    service = None if args.simulate else QiskitRuntimeService()
+    service = QiskitRuntimeService() if args.ibm else None
 
     moves = [Move.RY, Move.RZ, Move.CRX, Move.COLLAPSE]
 

@@ -280,7 +280,7 @@ def main():
     parser = create_parser("qttt-cli")
     args = parser.parse_args()
 
-    service = None if args.simulate else QiskitRuntimeService()
+    service = QiskitRuntimeService() if args.ibm else None
 
     moves = [Move.RY, Move.RZ, Move.CRX, Move.COLLAPSE]
 
