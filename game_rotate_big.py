@@ -6,9 +6,6 @@ from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 from qiskit.transpiler import CouplingMap
 
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-
 ###############################################################################
 # CONSTANTS
 ###############################################################################
@@ -19,7 +16,6 @@ MAX_ANGLE_Z = math.pi/2       # e.g. up to π/2 for Z rotations
 MAX_ANGLE_CONTROLLED = math.pi    # Up to π for controlled x
 
 MOVES_BETWEEN_AUTO_COLLAPSE = 10  # universal 10-move timer for auto-collapse
-SUB_BOARD_COUNT = 9
 
 ###############################################################################
 # FULLY CONNECTED 81-QUBIT COUPLING MAP
@@ -152,51 +148,6 @@ def boardIsFull(theBoard, topBoard):
             if empties:
                 return False
     return True
-
-
-###############################################################################
-# PRINTING SUB-BOARD CIRCUITS
-###############################################################################
-
-def display_circuit_of_sub_board(circuit: QuantumCircuit, sub_board_number: int):
-    # save full circuit to a file
-    filename = 'circuit_state.png'
-    circuit.draw('mpl', filename=filename, initial_state=True)
-    img = mpimg.imread(filename)
-    plt.close()
-
-    img_cropped = crop_circuit_image(img, sub_board_number)
-
-    fig = plt.figure()
-    ax = fig.add_subplot()
-    ax.axis("off")
-    ax.imshow(img_cropped)
-    plt.show(block=False)
-
-
-def crop_circuit_image(img, sub_board_number: int):
-    try:
-        # check if we are visualising a valid sub-board
-        if sub_board_number < 1 or sub_board_number > SUB_BOARD_COUNT:
-            raise ValueError
-        image_height = img.shape[0]
-        
-        # slices will overlap a little bit 
-        theoretical_height = image_height/SUB_BOARD_COUNT
-        slice_height = theoretical_height * 1.5
-        slice_half_height = int(slice_height/2)
-
-        # switch from 1-9 numbered to 0-8 indexed, compute slice center
-        slice_center = int(theoretical_height * (0.5 + sub_board_number - 1))
-
-        # lower bound is the top of image, upper bound is the bottom
-        lower_bound = max(0, slice_center - slice_half_height)
-        upper_bound = min(image_height, slice_center + slice_half_height)
-
-        return img[lower_bound:upper_bound, :, :]
-
-    except ValueError:
-        print("Failed to display partial circuit")
 
 
 ###############################################################################

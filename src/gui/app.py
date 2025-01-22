@@ -6,7 +6,8 @@ from gui.widgets.board import Board
 from gui.widgets.move_selection import MoveSelection
 from gui.widgets.number_selection import NumberSelection
 from qiskit.providers import BackendV2
-
+from backend.partial_circuits import display_circuit_of_sub_board
+from gui.widgets.partial_circuit_selection import Partial_Circuit_Selection
 
 class App:
     """Main application."""
@@ -40,11 +41,12 @@ class App:
         row_padding = "0 10"
 
         # row numbers
-        info_row = 0
-        board_row = 1
-        buttons_row = 2
+        partial_circuit_row = 0
+        info_row = 1
+        board_row = 2
+        buttons_row = 3
 
-        bottom_row_height = 120
+        button_row_height = 120
 
         # create main frame
         mainframe = ttk.Frame(root)
@@ -54,7 +56,8 @@ class App:
 
         mainframe.columnconfigure(0, weight=1)
         mainframe.rowconfigure(board_row, weight=1)
-        mainframe.rowconfigure(buttons_row, minsize=bottom_row_height)
+        mainframe.rowconfigure(buttons_row, minsize=button_row_height)
+        mainframe.rowconfigure(partial_circuit_row, weight=1)
 
         # create info label
         self._info_text = StringVar()
@@ -112,6 +115,13 @@ class App:
         )
         self._angle_selection.grid(row=buttons_row, column=0, sticky="S")
         self._angle_selection.grid_forget()
+
+        # create partial circuit widget
+        self._sub_board = StringVar()
+        self._sub_board_selection = Partial_Circuit_Selection(
+            mainframe, self._sub_board, self._partial_circuit, padding=row_padding
+        )
+        self._sub_board_selection.grid(row=partial_circuit_row, column=0, sticky="S")
 
         # create reset button
         self._reset_button = ttk.Button(
@@ -417,3 +427,11 @@ class App:
 
         # show move selection
         self._show_move_selection()
+
+
+    def _partial_circuit(self) -> None:
+        """Callback function for printing partial circuit."""
+
+        sub_board = self._sub_board.get()
+        display_circuit_of_sub_board(self._game._qc, sub_board)
+        self._sub_board.set("")
