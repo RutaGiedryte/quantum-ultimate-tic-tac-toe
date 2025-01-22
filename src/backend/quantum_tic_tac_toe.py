@@ -128,7 +128,7 @@ def get_fair_bitstring(counts, threshold, total) -> str:
 
 def run_circuit(qc, backend, shots) -> dict:
     qc.measure_all()
-    pm = generate_preset_pass_manager(backend=backend, optimization_level=3)
+    pm = generate_preset_pass_manager(backend=backend, optimization_level=0)
     isa_circuit = pm.run(qc)
     sampler = SamplerV2(mode=backend)
     job = sampler.run([isa_circuit], shots=shots)
@@ -329,16 +329,18 @@ class QuantumTicTacToe:
             if self._backend.name == "aer_simulator":
                 # Does optimization give more errors / remove quantum aspects?
                 counts = run_circuit(val, self._backend, 1)
-                print(type(list(counts.keys())[0]))
                 results[key] = list(counts.keys())[0]
             else:
                 result_string = ""
                 dag = circuit_to_dag(val)
-                seperated = dag.separable_circuits(True)
+                seperated = dag.separable_circuits(remove_idle_qubits=True)
                 for i in seperated:
                     qc = dag_to_circuit(i)
+                    if qc.num_qubits <= 0:
+                        result_string += str(0)
+                        continue
                     # What does changing the optimization_level do?
-                    counts = run_circuit(qc, self._backend, 2 ** (qc.num_qubits + 3))
+                    counts = run_circuit(qc=qc, backend=self._backend, shots=2 ** (qc.num_qubits + 3))
                     # Make sure to change the three here as well...
                     bitstring = get_fair_bitstring(counts, 0.05, 2 ** (qc.num_qubits + 3))
                     result_string += str(bitstring)
