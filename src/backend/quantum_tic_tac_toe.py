@@ -192,11 +192,14 @@ class QuantumTicTacToe:
         """Get the board at index `i`.
 
         Args:
-            i: board index
+            i: board index. -1 if getting big board state
 
         Returns:
             board at index `i`
         """
+
+        if i == -1:
+            return self._board_wins
 
         return self._boards[i]
 
