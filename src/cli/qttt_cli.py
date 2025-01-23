@@ -146,7 +146,7 @@ class QtttCLI:
             remaining_rotation -= abs(angle)
 
             # add rotation gate
-            collapsed.update(self._game.rotate(0, pos, axis, angle, n))
+            collapsed.update(self._game.rotate(board, pos, axis, angle, n))
 
             used.add(pos)
 
@@ -177,7 +177,7 @@ class QtttCLI:
         control = self._get_valid_position(board, move)
 
         # set control qubit
-        self._game.rotate_control(0, control)
+        self._game.rotate_control(board, control)
 
         # get target qubit index
         print("Choose target qubit.")
