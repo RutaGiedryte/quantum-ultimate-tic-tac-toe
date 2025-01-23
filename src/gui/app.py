@@ -1,5 +1,5 @@
 import math
-from tkinter import Tk, StringVar, ttk
+from tkinter import Tk, StringVar, DoubleVar, ttk
 from backend.quantum_tic_tac_toe import QuantumTicTacToe, State, Axis, Move
 from gui.widgets.angle_selection import AngleSelection
 from gui.widgets.board import Board
@@ -109,7 +109,7 @@ class App:
         self._number_selection.grid_forget()
 
         # create angle selection widget
-        self._angle = StringVar()
+        self._angle = DoubleVar()
         self._angle_selection = AngleSelection(
             mainframe, self._angle, self._set_rotation_angle, padding=row_padding
         )
@@ -158,16 +158,15 @@ class App:
             case Move.RX | Move.RY | Move.RZ:
                 # set axis
                 axis = self._selected_move.get_axis()
+                self._remaining_angle -= abs(self._angle.get())
 
                 collapsed = self._game.rotate(
                     board, cell, axis, float(self._angle.get()), self._number_to_rotate
                 )
                 # display angle selection again if more qubits to rotate
                 if self._game.has_moves():
-                    self._angle_selection.set_message(
-                        f"Enter angle to rotate by {self._remaining_angle}"
-                    )
-                    self._angle_selection.enable()
+                    self._angle_selection.set_message("Set angle to rotate by")
+                    self._angle_selection.enable(self._remaining_angle)
                 else:
                     self._angle_selection.grid_forget()
             # controlled rotation
@@ -185,6 +184,7 @@ class App:
                 else:
                     self._game.rotate_control(board, cell)
                     self._angle_selection.set_message("Choose target qubit")
+                    self._angle_selection.disable()
                     self._enable_boards()
             case Move.COLLAPSE:
                 collapsed = self._game.collapse(board)
@@ -266,10 +266,8 @@ class App:
         self._move_selection.grid_forget()
 
         # show angle selection widget
-        self._angle_selection.set_message(
-            f"Enter angle to rotate by (max. {self._remaining_angle})"
-        )
-        self._angle_selection.enable()
+        self._angle_selection.set_message("Set angle to rotate by")
+        self._angle_selection.enable(self._remaining_angle)
         self._angle_selection.grid()
 
     def _collapse(self) -> None:
@@ -297,38 +295,29 @@ class App:
         # hide number selection
         self._number_selection.grid_forget()
 
-        # show angle selection
-        self._angle_selection.set_message(
-            f"Enter angle to rotate by (max. {self._remaining_angle})"
+        max_angle = (
+            self._remaining_angle
+            if self._number_to_rotate == 1
+            else self._remaining_angle - math.pi / 4
         )
-        self._angle_selection.enable()
+
+        # show angle selection
+        self._angle_selection.set_message("Set angle to rotate by")
+        self._angle_selection.enable(max_angle)
         self._angle_selection.grid()
 
     def _set_rotation_angle(self) -> None:
         """Callback function for setting the rotation angle."""
 
-        # check if valid angle
-        angle = 0
-        try:
-            angle = float(self._angle.get())
-            if angle > self._remaining_angle:
-                raise ValueError
-        except ValueError:
-            self._angle_selection.set_message(
-                f"The angle must be between {-self._remaining_angle} and {self._remaining_angle}"
-            )
-            return
-
-        self._remaining_angle -= abs(angle)
-
-        # disable angle button
-        self._angle_selection.disable()
-
-        if self._selected_move in {Move.CRX, Move.CRY, Move.CRZ}:
-            self._angle_selection.set_message("Choose control qubit")
-
-        # enable board
-        self._enable_boards()
+        if self._angle.get() == 0:
+            self._angle_selection.set_message("Set angle to rotate by")
+            self._disable_boards()
+        else:
+            message = f"Rotate by {self._angle.get() / math.pi}\u03c0"
+            if self._selected_move in [Move.CRX, Move.CRY, Move.CRZ]:
+                message += ". Choose control qubit"
+            self._angle_selection.set_message(message)
+            self._enable_boards()
 
     def _enable_boards(self) -> None:
         """Enable available boards."""
