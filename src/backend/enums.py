@@ -96,6 +96,6 @@ class State(Enum):
             case State.O:
                 return "O"
             case State.DRAW:
-                return "draw"
+                return "?"
             case State.ENTANGLED:
                 return "e"
