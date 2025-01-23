@@ -6,8 +6,9 @@ from gui.widgets.board import Board
 from gui.widgets.move_selection import MoveSelection
 from gui.widgets.number_selection import NumberSelection
 from qiskit.providers import BackendV2
-from backend.partial_circuits import display_circuit_of_sub_board
+from gui.partial_circuits import display_circuit_of_sub_board
 from gui.widgets.partial_circuit_selection import PartialCircuitSelection
+
 
 class App:
     """Main application."""
@@ -121,7 +122,9 @@ class App:
             self._sub_board_selection = PartialCircuitSelection(
                 mainframe, self._sub_board, self._partial_circuit, padding=row_padding
             )
-            self._sub_board_selection.grid(row=partial_circuit_row, column=0, sticky="S")
+            self._sub_board_selection.grid(
+                row=partial_circuit_row, column=0, sticky="S"
+            )
 
         # create reset button
         self._reset_button = ttk.Button(
@@ -417,9 +420,8 @@ class App:
         # show move selection
         self._show_move_selection()
 
-
     def _partial_circuit(self) -> None:
-        """Callback function for printing partial circuit in the ultimate game."""            
+        """Callback function for printing partial circuit in the ultimate game."""
 
         sub_board = self._sub_board.get()
 

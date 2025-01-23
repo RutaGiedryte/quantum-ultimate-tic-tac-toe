@@ -1,9 +1,11 @@
 from qiskit import QuantumCircuit
-from os import getcwd, path
+from os import path
 
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
+from gui import PATH
+
 
 def display_circuit_of_sub_board(circuit: QuantumCircuit, sub_board_number: int):
     """Display part of the full circuit with the qubits corresponding to one of the sub-boards.
@@ -15,10 +17,10 @@ def display_circuit_of_sub_board(circuit: QuantumCircuit, sub_board_number: int)
 
     # remove any dangling plots
     plt.close()
-    
+
     # save full circuit to a file
-    img_path = path.join(getcwd(), "src", "Images", 'circuit_state.png')
-    circuit.draw('mpl', filename=img_path, initial_state=True)
+    img_path = path.join(PATH, "images", "circuit_state.png")
+    circuit.draw("mpl", filename=img_path, initial_state=True)
 
     img = mpimg.imread(img_path)
     plt.close()
@@ -40,11 +42,11 @@ def crop_circuit_image(img: np.ndarray, sub_board_number: int) -> np.ndarray:
     """
 
     image_height = img.shape[0]
-    
-    # slices will overlap a little bit 
-    theoretical_height = image_height/9
+
+    # slices will overlap a little bit
+    theoretical_height = image_height / 9
     slice_height = theoretical_height * 1.5
-    slice_half_height = int(slice_height/2)
+    slice_half_height = int(slice_height / 2)
 
     # switch from 1-9 numbered to 0-8 indexed, compute slice center
     slice_center = int(theoretical_height * (0.5 + sub_board_number - 1))
@@ -54,4 +56,3 @@ def crop_circuit_image(img: np.ndarray, sub_board_number: int) -> np.ndarray:
     upper_bound = min(image_height, slice_center + slice_half_height)
 
     return img[lower_bound:upper_bound, :, :]
-        
