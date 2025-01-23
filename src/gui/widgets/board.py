@@ -45,20 +45,9 @@ class Board(ttk.Frame):
 
         n_boards = 9 if ultimate else 1
 
-        # font
-        self._font = "Roboto"
-        self._font_size = int(self._board_width / 4)
-        self._win_font_size = int(self._board_width)
-
         # bg colours
         self._cell_disabled_color = "#E0E0E0"
         self._cell_enabled_color = "#FFFFFF"
-
-        # font colour
-        self._x_color = "#CB70FF"
-        self._o_color = "#44BC68"
-        self._draw_color = "#FFB300"
-        self._default_color = "#ABABAB"
 
         self._canvas = Canvas(self, width=width, height=width, highlightthickness=0)
         self._canvas.bind("<Button-1>", lambda event: self._on_click(event))
@@ -105,11 +94,16 @@ class Board(ttk.Frame):
         self._default_bloch_img = self._import_img("Bloch_-1.png")
         self._cross_img = self._import_img("X.png")
         self._circle_img = self._import_img("O.png")
+        self._cross_win_img = self._import_img("X_big.png")
+        self._circle_win_img = self._import_img("O_big.png")
+        self._draw_img = self._import_img("draw.png")
+        self._empty_img = self._import_img("empty.png")
 
         self._default_bloch_img_tk = ImageTk.PhotoImage(self._default_bloch_img)
+        self._empty_img_tk = ImageTk.PhotoImage(self._empty_img)
 
         # Insert the default bloch images and save their ids
-        self._symbol_ids = [
+        self._cell_image_ids = [
             [
                 self._canvas.create_image(
                     self._index_to_pos(b, c),
@@ -121,23 +115,25 @@ class Board(ttk.Frame):
             for b in range(self._n_boards)
         ]
 
-        self._win_symbol_ids = [
-            self._canvas.create_text(
-                self._index_to_pos(b, 4),
-                text="",
-                fill=self._draw_color,
-                font=(self._font, self._win_font_size),
+        self._win_image_ids = [
+            self._canvas.create_image(
+                self._index_to_pos(b, 4), anchor="center", image=self._empty_img_tk
             )
-            for b in range(n_boards)
+            for b in range(self._n_boards)
         ]
 
         # Save references to the images so they don't get garbage collected
-        self._image_refs = [
+        self._cell_image_refs = [
             [
                 {"img": self._default_bloch_img, "img_tk": self._default_bloch_img_tk}
                 for c in range(9)
             ]
             for b in range(self._n_boards)
+        ]
+
+        self._win_image_refs = [
+            {"img": self._empty_img, "img_tk": self._empty_img_tk}
+            for _ in range(self._n_boards)
         ]
 
         self.bind("<Configure>", self._on_resize)
@@ -216,9 +212,7 @@ class Board(ttk.Frame):
         self._entanglement_ids[board].clear()
 
         # clear win symbol
-        self._canvas.itemconfigure(
-            self._win_symbol_ids[board], text="", fill=self._draw_color
-        )
+        self._set_win_image(board, self._empty_img)
 
     def update_display(self, board: int, states: list[State]) -> None:
         """Update symbols to display on `board`.
@@ -252,15 +246,15 @@ class Board(ttk.Frame):
             winner: subboard winner
         """
 
-        id = self._win_symbol_ids[board]
-
         match winner:
             case State.X:
-                self._canvas.itemconfigure(id, text="X", fill=self._x_color)
+                img = self._cross_win_img
             case State.O:
-                self._canvas.itemconfigure(id, text="O", fill=self._o_color)
+                img = self._circle_win_img
             case State.DRAW:
-                self._canvas.itemconfigure(id, text="?")
+                img = self._draw_img
+
+        self._set_win_image(board, img)
 
     def touch_cell(self, board: int, cell: int, state_vector: list[int]) -> None:
         """Touch `cell` on `board`.
@@ -312,7 +306,7 @@ class Board(ttk.Frame):
 
         return (x, y)
 
-    def _set_cell_image(self, board, cell, img) -> None:
+    def _set_cell_image(self, board: int, cell: int, img: Image.Image) -> None:
         """Set the image of `cell` on `board`.
 
         The image will be resized to be the same size as the cell.
@@ -326,10 +320,27 @@ class Board(ttk.Frame):
         width = int(self._board_width / 3)
         tk_img = ImageTk.PhotoImage(img.resize((width, width)))
 
-        self._image_refs[board][cell]["img"] = img
-        self._image_refs[board][cell]["img_tk"] = tk_img
+        self._cell_image_refs[board][cell]["img"] = img
+        self._cell_image_refs[board][cell]["img_tk"] = tk_img
 
-        self._canvas.itemconfigure(self._symbol_ids[board][cell], image=tk_img)
+        self._canvas.itemconfigure(self._cell_image_ids[board][cell], image=tk_img)
+
+    def _set_win_image(self, board: int, img: Image.Image) -> None:
+        """Set the winner image for `board`.
+
+        The image will be resized to be the same size as the board.
+
+        Args:
+            board: board index
+            img: win image
+        """
+        width = int(self._board_width)
+        tk_img = ImageTk.PhotoImage(img.resize((width, width)))
+
+        self._win_image_refs[board]["img"] = img
+        self._win_image_refs[board]["img_tk"] = tk_img
+
+        self._canvas.itemconfigure(self._win_image_ids[board], image=tk_img)
 
     def _import_img(self, name: str) -> Image.Image:
         """Imports the desired image.
@@ -442,13 +453,6 @@ class Board(ttk.Frame):
         # scale all objects on canvas
         self._canvas.scale("all", 0, 0, scale, scale)
 
-        # scale win symbols
-        self._win_font_size = int(self._board_width)
-        font = (self._font, self._win_font_size)
-
-        for id in self._win_symbol_ids:
-            self._canvas.itemconfigure(id, font=font)
-
         # scale entanglement line width
         for list in self._entanglement_ids:
             for id in list:
@@ -470,5 +474,10 @@ class Board(ttk.Frame):
 
         # scale images
         for board in range(self._n_boards):
+            # scale cell images
             for cell in range(9):
-                self._set_cell_image(board, cell, self._image_refs[board][cell]["img"])
+                self._set_cell_image(
+                    board, cell, self._cell_image_refs[board][cell]["img"]
+                )
+            # scale win symbol images
+            self._set_win_image(board, self._win_image_refs[board]["img"])
