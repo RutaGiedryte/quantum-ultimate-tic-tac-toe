@@ -430,8 +430,15 @@ class App:
 
 
     def _partial_circuit(self) -> None:
-        """Callback function for printing partial circuit."""
+        """Callback function for printing partial circuit."""            
 
         sub_board = self._sub_board.get()
-        display_circuit_of_sub_board(self._game._qc, sub_board)
+
+        try:
+            sub_board_number = int(sub_board)
+            if sub_board_number >= 1 and sub_board_number <= 9:
+                display_circuit_of_sub_board(self._game._qc, sub_board_number)
+        except ValueError:
+            pass
+
         self._sub_board.set("")
