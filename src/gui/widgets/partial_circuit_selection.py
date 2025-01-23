@@ -1,6 +1,6 @@
 from tkinter import StringVar, Widget, ttk
 
-class Partial_Circuit_Selection(ttk.Frame):
+class PartialCircuitSelection(ttk.Frame):
     """Widget for selecting the partial circuit to display."""
 
     def __init__(self, parent: Widget, textvariable: StringVar, callback, **kw) -> None:
