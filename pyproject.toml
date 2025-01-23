@@ -1,6 +1,12 @@
 [project]
 name = "quantum-tic-tac-toe"
-authors = []
+authors = [
+    { name = "Rūta Giedrytė" },
+    { name = "Leander Bindt" },
+    { name = "Nils Mikk" },
+    { name = "Fran Ogurlić" },
+    { name = "Hidde van Luenen" },
+]
 description = "Quantum Tic-Tac-Toe"
 readme = "README.md"
 version = "0.0.1"
