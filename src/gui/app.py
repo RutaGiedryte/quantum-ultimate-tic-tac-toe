@@ -57,7 +57,6 @@ class App:
         mainframe.columnconfigure(0, weight=1)
         mainframe.rowconfigure(board_row, weight=1)
         mainframe.rowconfigure(buttons_row, minsize=button_row_height)
-        mainframe.rowconfigure(partial_circuit_row, weight=1)
 
         # create info label
         self._info_text = StringVar()
