@@ -5,8 +5,9 @@ from qiskit.visualization import plot_bloch_vector
 import matplotlib.pyplot as plt
 from numpy.exceptions import ComplexWarning
 from backend.enums import State
-from os import getcwd, path
+from os import path
 import warnings
+from gui import PATH
 
 # disable ComplexWarning
 warnings.filterwarnings("ignore", category=ComplexWarning)
@@ -268,10 +269,10 @@ class Board(ttk.Frame):
         """
 
         # generate image
-        img_path = path.join(getcwd(), "src", "Images", f"Bloch_{board}_{cell}.png")
+        img_path = path.join(PATH, "images", f"Bloch_{board}_{cell}.png")
 
         plot_bloch_vector(state_vector).savefig(
-            path.join(img_path), transparent=True, dpi=50
+            img_path, transparent=True, dpi=50
         )
         plt.close()
 
@@ -356,7 +357,7 @@ class Board(ttk.Frame):
         """
 
         try:
-            img_path = path.join(getcwd(), "src", "Images", name)
+            img_path = path.join(PATH, "images", name)
             return Image.open(img_path)
         except FileNotFoundError:
             print(f"Image not found at {img_path}. Please check the path.")
