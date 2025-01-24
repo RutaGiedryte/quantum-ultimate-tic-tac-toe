@@ -2,7 +2,7 @@
 
 Quantum tic-tac-toe is a quantum version of the classical game — tic-tac-toe. In this quantum version, each cell is represented by a qubit. All cells start in the $\ket{0}$ state. Every turn, players can rotate a qubit around an axis of their choice. The players can also choose to measure the state of the board.
 
-Two copies of the quantum circuit are measured: one in z-basis, and one in x-basis. Measuring in z-basis determines whether the symbol exists: it exists if we measure 1. Measuring in x-basis determines what symbol it is: 'O' if it is 1, and 'X' if it is 0. Once a symbol is measured to exist, the corresponding qubit can no longer be rotated.
+Two copies of the quantum circuit are measured: one in z-basis, and one in x-basis. Measuring in z-basis determines whether the symbol exists: it exists if we measure 1. Measuring in x-basis determines what symbol it is: 'X' if it is 1, and 'O' if it is 0. Once a symbol is measured to exist, the corresponding qubit can no longer be rotated.
 
 The board is automatically measured after ten turns since the last measurement.
 
