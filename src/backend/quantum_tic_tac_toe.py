@@ -69,6 +69,38 @@ def run_circuit(qc, backend, shots, cmap=None) -> dict:
     return counts
 
 
+def get_active_qubits(qc):
+    """
+    Get the active qubits of a given circuit
+    :param qc:  The circuit we want the active qubits find
+    :return: A list with the indexes of the active qubits
+    """
+    active_qubits = set()
+    for instr in qc.data:  # Loop over all instructions in the circuit
+        for qubit in instr.qubits:  # Each instruction has a list of qubits it acts on
+            active_qubits.add(qc.find_bit(qubit).index)  # Get the qubit index
+    return sorted(active_qubits)
+
+
+def remove_idle_qubits(qc):
+    """
+    Removes the non-active qubits from a circuit
+    :param qc:  The circuit to remove the qubits from
+    :return:  Returns a new circuit with only the active qubits
+    """
+    dag = circuit_to_dag(qc)
+    seperated = dag.separable_circuits(True)
+    empty = True
+    result = None
+    for i in seperated:
+        if dag_to_circuit(i).num_qubits > 0:
+            empty = False
+            result = dag_to_circuit(i)
+    if empty:
+        result = QuantumCircuit(0)
+    return result
+
+
 class QuantumTicTacToe:
     """Class representing quantum tic-tac-toe game."""
 
@@ -307,19 +339,21 @@ class QuantumTicTacToe:
                 results[key] = max(counts, key=counts.get)
             else:
                 # Maybe optimize that we only run the x-basis for the qubits that are 1 in the z-basis?
-                result_string = ""
+                result_string = [0] * (81 if self._ultimate else 9)
                 dag = circuit_to_dag(val)
-                seperated = dag.separable_circuits(remove_idle_qubits=True)
+                seperated = dag.separable_circuits(remove_idle_qubits=False)
                 for i in range(len(seperated)):
                     qc = dag_to_circuit(seperated[i])
-                    qc.measure_active()
-                    if qc.num_qubits <= 0:
-                        result_string += str(0)
-                        continue
-                    # We can change the amount of shots if we want...
-                    counts = run_circuit(qc=qc, backend=self._backend, shots=2 ** (qc.num_qubits + 3))
-                    bitstring = get_fair_bitstring(counts, 0.05, 2 ** (qc.num_qubits + 3))
-                    result_string += str(bitstring)
+                    active_qubits = get_active_qubits(qc)
+                    new_qc = remove_idle_qubits(qc)
+                    new_qc.draw('mpl', filename="img/test.png")
+                    if new_qc.num_qubits > 0:
+                        new_qc.measure_active()
+                        # We can change the amount of shots if we want...
+                        counts = run_circuit(qc=new_qc, backend=self._backend, shots=2 ** (new_qc.num_qubits + 3))
+                        bitstring = get_fair_bitstring(counts, 0.05, 2 ** (new_qc.num_qubits + 3))[::-1]
+                        for j in range(len(active_qubits)):
+                            result_string[active_qubits[j]] = bitstring[j]
                 results[key] = result_string
 
         # update board
