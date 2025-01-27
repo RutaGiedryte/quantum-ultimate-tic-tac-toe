@@ -50,7 +50,7 @@ def get_fair_bitstring(counts: dict, threshold: float, total: int) -> str:
     return chosen_state
 
 
-def run_circuit(qc: QuantumCircuit, backend: BackendV2, shots: int, cmap: CouplingMap = None) -> dict:
+def run_circuit(qc: QuantumCircuit, backend: BackendV2, shots: int, cmap: CouplingMap | None = None) -> dict:
     """
     Run a given quantum circuit on the provided backend with the proper amount of shots.
 
@@ -349,7 +349,7 @@ class QuantumTicTacToe:
                 results[key] = max(counts, key=counts.get)
             else:
                 # Maybe optimize that we only run the x-basis for the qubits that are 1 in the z-basis?
-                result_string = "0" * (81 if self._ultimate else 9)
+                result_string = ["0"] * (81 if self._ultimate else 9)
                 dag = circuit_to_dag(val)
                 seperated = dag.separable_circuits(remove_idle_qubits=False)
                 for i in range(len(seperated)):
@@ -363,7 +363,7 @@ class QuantumTicTacToe:
                         bitstring = get_fair_bitstring(counts, 0.05, 2 ** (new_qc.num_qubits + 3))[::-1]
                         for j in range(len(active_qubits)):
                             result_string[active_qubits[j]] = bitstring[j]
-                results[key] = result_string
+                results[key] = ''.join(result_string)
 
         # update board
         for i in range(self._n_bits):
