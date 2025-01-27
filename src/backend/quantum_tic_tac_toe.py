@@ -57,7 +57,7 @@ def run_circuit(qc, backend, shots, cmap=None) -> dict:
     :param cmap:  the coupling map needed for the 81-qubit circuit
     :return: returns the counts variable form the job result.
     """
-    pm = generate_preset_pass_manager(backend=backend, optimization_level=3, coupling_map=cmap if cmap else None)
+    pm = generate_preset_pass_manager(backend=backend, optimization_level=3, coupling_map=cmap)
     isa_circuit = pm.run(qc)
     sampler = SamplerV2(mode=backend)
     job = sampler.run([isa_circuit], shots=shots)
