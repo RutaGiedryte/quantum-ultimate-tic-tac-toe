@@ -24,14 +24,17 @@ def fully_connected_81_coupling():
     return CouplingMap(edges)
 
 
-def get_fair_bitstring(counts, threshold, total) -> str:
+def get_fair_bitstring(counts: dict, threshold: float, total: int) -> str:
     """
-    Remove the noise from a job result without losing the quantum aspects.
+    Removes the noise from a job result without losing the quantum aspects.
 
-    :param counts: The result to process
-    :param threshold: The noise level threshold, values under this threshold are discarded
-    :param total: The total amount of shots
-    :return: Returns a bitstring as if the circuit was run 1 time without noise.
+    Args:
+        counts: The result to process
+        threshold: The noise level threshold, values under this threshold are discarded
+        total: The total amount of shots
+
+    Returns:
+        Returns a bitstring as if the circuit was run 1 time without noise.
     """
     probabilities = {state: count / total for state, count in counts.items()}
     try:
@@ -47,15 +50,18 @@ def get_fair_bitstring(counts, threshold, total) -> str:
     return chosen_state
 
 
-def run_circuit(qc, backend, shots, cmap=None) -> dict:
+def run_circuit(qc: QuantumCircuit, backend: BackendV2, shots: int, cmap: CouplingMap = None) -> dict:
     """
     Run a given quantum circuit on the provided backend with the proper amount of shots.
 
-    :param qc:  the quantum circuit to run
-    :param backend: the backend to run on
-    :param shots:  the amount of shots
-    :param cmap:  the coupling map needed for the 81-qubit circuit
-    :return: returns the counts variable form the job result.
+    Args:
+        qc:  the quantum circuit to run
+        backend: the backend to run on
+        shots:  the amount of shots
+        cmap:  the coupling map needed for the 81-qubit circuit
+
+    Returns:
+        returns the counts variable form the job result.
     """
     pm = generate_preset_pass_manager(backend=backend, optimization_level=3, coupling_map=cmap)
     isa_circuit = pm.run(qc)
@@ -69,11 +75,15 @@ def run_circuit(qc, backend, shots, cmap=None) -> dict:
     return counts
 
 
-def get_active_qubits(qc):
+def get_active_qubits(qc: QuantumCircuit) -> list[int]:
     """
     Get the active qubits of a given circuit
-    :param qc:  The circuit we want the active qubits find
-    :return: A list with the indexes of the active qubits
+
+    Args:
+        qc: The circuit we want the active qubits find
+
+    Returns:
+        A list with the indexes of the active qubits
     """
     active_qubits = set()
     for instr in qc.data:  # Loop over all instructions in the circuit
@@ -82,35 +92,35 @@ def get_active_qubits(qc):
     return sorted(active_qubits)
 
 
-def remove_idle_qubits(qc):
+def remove_idle_qubits(qc: QuantumCircuit) -> QuantumCircuit:
     """
     Removes the non-active qubits from a circuit
-    :param qc:  The circuit to remove the qubits from
-    :return:  Returns a new circuit with only the active qubits
+
+    Args:
+        qc:  The circuit to remove the qubits from
+
+    Returns:
+        Returns a new circuit with only the active qubits
     """
     dag = circuit_to_dag(qc)
     seperated = dag.separable_circuits(True)
-    empty = True
-    result = None
     for i in seperated:
-        if dag_to_circuit(i).num_qubits > 0:
-            empty = False
-            result = dag_to_circuit(i)
-    if empty:
-        result = QuantumCircuit(0)
-    return result
+        new_qc = dag_to_circuit(i)
+        if new_qc.num_qubits > 0:
+            return new_qc
+    return QuantumCircuit(0)
 
 
 class QuantumTicTacToe:
     """Class representing quantum tic-tac-toe game."""
 
     def __init__(
-        self,
-        backend: BackendV2,
-        max_angle: float,
-        max_controlled_angle: float,
-        max_turns: int,
-        ultimate: bool,
+            self,
+            backend: BackendV2,
+            max_angle: float,
+            max_controlled_angle: float,
+            max_turns: int,
+            ultimate: bool,
     ):
         """Create the game.
 
@@ -339,14 +349,13 @@ class QuantumTicTacToe:
                 results[key] = max(counts, key=counts.get)
             else:
                 # Maybe optimize that we only run the x-basis for the qubits that are 1 in the z-basis?
-                result_string = [0] * (81 if self._ultimate else 9)
+                result_string = "0" * (81 if self._ultimate else 9)
                 dag = circuit_to_dag(val)
                 seperated = dag.separable_circuits(remove_idle_qubits=False)
                 for i in range(len(seperated)):
                     qc = dag_to_circuit(seperated[i])
                     active_qubits = get_active_qubits(qc)
                     new_qc = remove_idle_qubits(qc)
-                    new_qc.draw('mpl', filename="img/test.png")
                     if new_qc.num_qubits > 0:
                         new_qc.measure_active()
                         # We can change the amount of shots if we want...
@@ -426,7 +435,7 @@ class QuantumTicTacToe:
         return self._board_wins[board]
 
     def rotate(
-        self, board: int, cell: int, axis: Axis, angle: float, n: int
+            self, board: int, cell: int, axis: Axis, angle: float, n: int
     ) -> set[int]:
         """Add rotation gate to the circuit.
 
@@ -502,11 +511,11 @@ class QuantumTicTacToe:
         self._touch_cell(board, cell)
 
     def rotate_target(
-        self,
-        board: int,
-        cell: int,
-        axis: Axis,
-        angle: float,
+            self,
+            board: int,
+            cell: int,
+            axis: Axis,
+            angle: float,
     ) -> set[int]:
         """Add controlled rotation gate to the circuit.
 
