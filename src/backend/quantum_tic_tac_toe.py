@@ -47,16 +47,17 @@ def get_fair_bitstring(counts, threshold, total) -> str:
     return chosen_state
 
 
-def run_circuit(qc, backend, shots) -> dict:
+def run_circuit(qc, backend, shots, cmap=None) -> dict:
     """
     Run a given quantum circuit on the provided backend with the proper amount of shots.
 
     :param qc:  the quantum circuit to run
     :param backend: the backend to run on
     :param shots:  the amount of shots
+    :param cmap:  the coupling map needed for the 81-qubit circuit
     :return: returns the counts variable form the job result.
     """
-    pm = generate_preset_pass_manager(backend=backend, optimization_level=3)
+    pm = generate_preset_pass_manager(backend=backend, optimization_level=3, coupling_map=cmap if cmap else None)
     isa_circuit = pm.run(qc)
     sampler = SamplerV2(mode=backend)
     job = sampler.run([isa_circuit], shots=shots)
@@ -302,19 +303,8 @@ class QuantumTicTacToe:
         # run circuit
         for key, val in qcs.items():
             if self._backend.name == "aer_simulator_matrix_product_state":
-                pm = generate_preset_pass_manager(backend=self._backend, optimization_level=3, coupling_map=cmap)
-                isa_circuit = pm.run(val)
-                sampler = SamplerV2(mode=self._backend)
-                job = sampler.run([isa_circuit], shots=1)
-                result = job.result()
-                try:
-                    counts = getattr(result[0].data, val.cregs[0].name, None).get_counts()  # type: ignore
-                except AttributeError:
-                    raise SystemError("Empty or invalid result..")  # What after this?
-
-                # There is only one shot...?
-                most_populated_string = max(counts, key=counts.get)
-                results[key] = most_populated_string
+                counts = run_circuit(qc=val, backend=self._backend, shots=1, cmap=cmap)
+                results[key] = max(counts, key=counts.get)
             else:
                 # Maybe optimize that we only run the x-basis for the qubits that are 1 in the z-basis?
                 result_string = ""

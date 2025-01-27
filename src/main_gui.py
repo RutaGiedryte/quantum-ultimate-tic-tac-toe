@@ -30,7 +30,7 @@ def main():
             simulator=False, operational=True, min_num_qubits=81 if ultimate else 9
         )
     else:
-        # backend = FakeSherbrooke()
+        backend = FakeSherbrooke()
         backend = AerSimulator(method="matrix_product_state")  # use non-noisy simulator
 
     App(root, ultimate=ultimate, moves=moves, backend=backend)
