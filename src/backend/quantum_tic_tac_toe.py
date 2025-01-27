@@ -287,24 +287,17 @@ class QuantumTicTacToe:
 
         cmap = fully_connected_81_coupling()
 
-        if self._backend.name != "aer_simulator_matrix_product_state":
-            for i in range(qcs['symbol'].num_qubits):
-                qcs['symbol'].h(i)
-            for b, cells in enumerate(self._active_cells):
-                if b not in boards:
-                    continue
-                cells.clear()
-        else:
-            # measure only active cells
-            for b, cells in enumerate(self._active_cells):
-                if b not in boards:
-                    continue
-                for c in cells:
-                    index = b * 9 + c
+        # measure only active cells
+        for b, cells in enumerate(self._active_cells):
+            if b not in boards:
+                continue
+            for c in cells:
+                index = b * 9 + c
+                qcs["symbol"].h(index)
+                if self._backend.name == "aer_simulator_matrix_product_state":
                     qcs["exist"].measure(index, index)
-                    qcs["symbol"].h(index)
                     qcs["symbol"].measure(index, index)
-                cells.clear()
+            cells.clear()
 
         # run circuit
         for key, val in qcs.items():
