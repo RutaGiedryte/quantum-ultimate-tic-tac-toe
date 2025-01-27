@@ -1,4 +1,7 @@
+import random
+
 from qiskit import QuantumCircuit, generate_preset_pass_manager
+from qiskit.converters import circuit_to_dag, dag_to_circuit
 from qiskit.transpiler import CouplingMap
 from qiskit.providers import BackendV2
 from qiskit_ibm_runtime import SamplerV2
@@ -21,16 +24,103 @@ def fully_connected_81_coupling():
     return CouplingMap(edges)
 
 
+def get_fair_bitstring(counts: dict, threshold: float, total: int) -> str:
+    """
+    Removes the noise from a job result without losing the quantum aspects.
+
+    Args:
+        counts: The result to process
+        threshold: The noise level threshold, values under this threshold are discarded
+        total: The total amount of shots
+
+    Returns:
+        Returns a bitstring as if the circuit was run 1 time without noise.
+    """
+    probabilities = {state: count / total for state, count in counts.items()}
+    try:
+        filtered_probabilities = {state: prob for state, prob in probabilities.items() if prob >= threshold}
+        if not filtered_probabilities:
+            raise ValueError("All states were filtered out.")
+    except ValueError:
+        filtered_probabilities = {max(counts, key=counts.get): 1}
+    total_prob = sum(filtered_probabilities.values())
+    normalized_probabilities = {state: prob / total_prob for state, prob in filtered_probabilities.items()}
+    states, probs = zip(*normalized_probabilities.items())
+    chosen_state = random.choices(states, weights=probs, k=1)[0]
+    return chosen_state
+
+
+def run_circuit(qc: QuantumCircuit, backend: BackendV2, shots: int, cmap: CouplingMap | None = None) -> dict:
+    """
+    Run a given quantum circuit on the provided backend with the proper amount of shots.
+
+    Args:
+        qc:  the quantum circuit to run
+        backend: the backend to run on
+        shots:  the amount of shots
+        cmap:  the coupling map needed for the 81-qubit circuit
+
+    Returns:
+        returns the counts variable form the job result.
+    """
+    pm = generate_preset_pass_manager(backend=backend, optimization_level=3, coupling_map=cmap)
+    isa_circuit = pm.run(qc)
+    sampler = SamplerV2(mode=backend)
+    job = sampler.run([isa_circuit], shots=shots)
+    result = job.result()
+    try:
+        counts = getattr(result[0].data, qc.cregs[0].name, None).get_counts()
+    except AttributeError:
+        raise SystemError("Empty or invalid result..")  # Handle this?
+    return counts
+
+
+def get_active_qubits(qc: QuantumCircuit) -> list[int]:
+    """
+    Get the active qubits of a given circuit
+
+    Args:
+        qc: The circuit we want the active qubits find
+
+    Returns:
+        A list with the indexes of the active qubits
+    """
+    active_qubits = set()
+    for instr in qc.data:  # Loop over all instructions in the circuit
+        for qubit in instr.qubits:  # Each instruction has a list of qubits it acts on
+            active_qubits.add(qc.find_bit(qubit).index)  # Get the qubit index
+    return sorted(active_qubits)
+
+
+def remove_idle_qubits(qc: QuantumCircuit) -> QuantumCircuit:
+    """
+    Removes the non-active qubits from a circuit
+
+    Args:
+        qc:  The circuit to remove the qubits from
+
+    Returns:
+        Returns a new circuit with only the active qubits
+    """
+    dag = circuit_to_dag(qc)
+    seperated = dag.separable_circuits(True)
+    for i in seperated:
+        new_qc = dag_to_circuit(i)
+        if new_qc.num_qubits > 0:
+            return new_qc
+    return QuantumCircuit(0)
+
+
 class QuantumTicTacToe:
     """Class representing quantum tic-tac-toe game."""
 
     def __init__(
-        self,
-        backend: BackendV2,
-        max_angle: float,
-        max_controlled_angle: float,
-        max_turns: int,
-        ultimate: bool,
+            self,
+            backend: BackendV2,
+            max_angle: float,
+            max_controlled_angle: float,
+            max_turns: int,
+            ultimate: bool,
     ):
         """Create the game.
 
@@ -46,9 +136,13 @@ class QuantumTicTacToe:
         self._n_bits = 81 if ultimate else 9
         self._n_boards = 9 if ultimate else 1
 
-        self._qc = QuantumCircuit(self._n_bits, self._n_bits)
-
         self._backend = backend
+
+        if self._backend.name == "aer_simulator_matrix_product_state":
+            self._qc = QuantumCircuit(self._n_bits, self._n_bits)
+        else:
+            self._qc = QuantumCircuit(self._n_bits)
+
         self._max_angle = max_angle
         self._max_controlled_angle = max_controlled_angle
         self._max_turns = max_turns
@@ -232,40 +326,44 @@ class QuantumTicTacToe:
                     to_check.append(entangled_board)
                 self._entangled_boards[b].clear()
 
-        # measure only active cells
-        for b, cells in enumerate(self._active_cells):
-            if b not in boards:
-                continue
-
-            for c in cells:
-                index = b * 9 + c
-                qcs["exist"].measure(index, index)
-                qcs["symbol"].h(index)
-                qcs["symbol"].measure(index, index)
-
-            cells.clear()
-
         results = {}
 
         cmap = fully_connected_81_coupling()
 
+        # measure only active cells
+        for b, cells in enumerate(self._active_cells):
+            if b not in boards:
+                continue
+            for c in cells:
+                index = b * 9 + c
+                qcs["symbol"].h(index)
+                if self._backend.name == "aer_simulator_matrix_product_state":
+                    qcs["exist"].measure(index, index)
+                    qcs["symbol"].measure(index, index)
+            cells.clear()
+
         # run circuit
         for key, val in qcs.items():
-            pm = generate_preset_pass_manager(
-                backend=self._backend, optimization_level=1, coupling_map=cmap
-            )
-            isa_circuit = pm.run(val)
-            sampler = SamplerV2(mode=self._backend)
-            job = sampler.run([isa_circuit], shots=1)
-            result = job.result()
-
-            try:
-                counts = getattr(result[0].data, val.cregs[0].name, None).get_counts()  # type: ignore
-            except AttributeError:
-                raise SystemError("Empty or invalid result..")  # What after this?
-
-            most_populated_string = max(counts, key=counts.get)
-            results[key] = most_populated_string
+            if self._backend.name == "aer_simulator_matrix_product_state":
+                counts = run_circuit(qc=val, backend=self._backend, shots=1, cmap=cmap)
+                results[key] = max(counts, key=counts.get)
+            else:
+                # Maybe optimize that we only run the x-basis for the qubits that are 1 in the z-basis?
+                result_string = ["0"] * (81 if self._ultimate else 9)
+                dag = circuit_to_dag(val)
+                seperated = dag.separable_circuits(remove_idle_qubits=False)
+                for i in range(len(seperated)):
+                    qc = dag_to_circuit(seperated[i])
+                    active_qubits = get_active_qubits(qc)
+                    new_qc = remove_idle_qubits(qc)
+                    if new_qc.num_qubits > 0:
+                        new_qc.measure_active()
+                        # We can change the amount of shots if we want...
+                        counts = run_circuit(qc=new_qc, backend=self._backend, shots=2 ** (new_qc.num_qubits + 3))
+                        bitstring = get_fair_bitstring(counts, 0.05, 2 ** (new_qc.num_qubits + 3))[::-1]
+                        for j in range(len(active_qubits)):
+                            result_string[active_qubits[j]] = bitstring[j]
+                results[key] = ''.join(result_string)
 
         # update board
         for i in range(self._n_bits):
@@ -288,17 +386,26 @@ class QuantumTicTacToe:
                 self._boards[board][cell] = State.EMPTY
 
             # set symbol if measured 1 in z-basis
-            if int(results["exist"][self._n_bits - 1 - i]):
-                self._boards[board][cell] = (
-                    State.X if int(results["symbol"][self._n_bits - 1 - i]) else State.O
-                )
+            if self._backend.name == "aer_simulator_matrix_product_state":
+                if int(results["exist"][self._n_bits - 1 - i]):
+                    self._boards[board][cell] = (
+                        State.X if int(results["symbol"][self._n_bits - 1 - i]) else State.O
+                    )
+            else:
+                if int(results["exist"][i]):
+                    self._boards[board][cell] = (
+                        State.X if int(results["symbol"][i]) else State.O
+                    )
 
             # reset measured qubit
             self._qc.reset(i)
 
         # reset whole circuit if collapsed whole board
         if board is None:
-            self._qc = QuantumCircuit(self._n_bits, self._n_bits)
+            if self._backend.name == "aer_simulator_matrix_product_state":
+                self._qc = QuantumCircuit(self._n_bits, self._n_bits)
+            else:
+                self._qc = QuantumCircuit(self._n_bits)
 
         self._touched = [set() for _ in self._boards]
 
@@ -328,7 +435,7 @@ class QuantumTicTacToe:
         return self._board_wins[board]
 
     def rotate(
-        self, board: int, cell: int, axis: Axis, angle: float, n: int
+            self, board: int, cell: int, axis: Axis, angle: float, n: int
     ) -> set[int]:
         """Add rotation gate to the circuit.
 
@@ -404,11 +511,11 @@ class QuantumTicTacToe:
         self._touch_cell(board, cell)
 
     def rotate_target(
-        self,
-        board: int,
-        cell: int,
-        axis: Axis,
-        angle: float,
+            self,
+            board: int,
+            cell: int,
+            axis: Axis,
+            angle: float,
     ) -> set[int]:
         """Add controlled rotation gate to the circuit.
 
