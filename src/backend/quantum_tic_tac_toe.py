@@ -25,6 +25,14 @@ def fully_connected_81_coupling():
 
 
 def get_fair_bitstring(counts, threshold, total) -> str:
+    """
+    Remove the noise from a job result without losing the quantum aspects.
+
+    :param counts: The result to process
+    :param threshold: The noise level threshold, values under this threshold are discarded
+    :param total: The total amount of shots
+    :return: Returns a bitstring as if the circuit was run 1 time without noise.
+    """
     probabilities = {state: count / total for state, count in counts.items()}
     try:
         filtered_probabilities = {state: prob for state, prob in probabilities.items() if prob >= threshold}
@@ -40,8 +48,14 @@ def get_fair_bitstring(counts, threshold, total) -> str:
 
 
 def run_circuit(qc, backend, shots) -> dict:
-    # qc.measure_all() # Not needed in this version
-    # Does increasing the optimization_level result in different results?
+    """
+    Run a given quantum circuit on the provided backend with the proper amount of shots.
+
+    :param qc:  the quantum circuit to run
+    :param backend: the backend to run on
+    :param shots:  the amount of shots
+    :return: returns the counts variable form the job result.
+    """
     pm = generate_preset_pass_manager(backend=backend, optimization_level=3)
     isa_circuit = pm.run(qc)
     sampler = SamplerV2(mode=backend)
@@ -271,29 +285,30 @@ class QuantumTicTacToe:
 
         results = {}
 
-        qcs['exist'].draw('mpl', filename="big_one.png")
-        dag = circuit_to_dag(qcs['exist'])
-        dag.draw(filename="big_one_dag.png")
-
         cmap = fully_connected_81_coupling()
 
         if self._backend.name != "aer_simulator_matrix_product_state":
             for i in range(qcs['symbol'].num_qubits):
                 qcs['symbol'].h(i)
+            for b, cells in enumerate(self._active_cells):
+                if b not in boards:
+                    continue
+                cells.clear()
+        else:
+            # measure only active cells
+            for b, cells in enumerate(self._active_cells):
+                if b not in boards:
+                    continue
+                for c in cells:
+                    index = b * 9 + c
+                    qcs["exist"].measure(index, index)
+                    qcs["symbol"].h(index)
+                    qcs["symbol"].measure(index, index)
+                cells.clear()
 
         # run circuit
         for key, val in qcs.items():
             if self._backend.name == "aer_simulator_matrix_product_state":
-                # measure only active cells
-                for b, cells in enumerate(self._active_cells):
-                    if b not in boards:
-                        continue
-                    for c in cells:
-                        index = b * 9 + c
-                        qcs["exist"].measure(index, index)
-                        qcs["symbol"].h(index)
-                        qcs["symbol"].measure(index, index)
-                    cells.clear()
                 pm = generate_preset_pass_manager(backend=self._backend, optimization_level=3, coupling_map=cmap)
                 isa_circuit = pm.run(val)
                 sampler = SamplerV2(mode=self._backend)
@@ -309,11 +324,6 @@ class QuantumTicTacToe:
                 # print(most_populated_string)
                 results[key] = most_populated_string
             else:
-
-                for b, cells in enumerate(self._active_cells):
-                    if b not in boards:
-                        continue
-                    cells.clear()
                 # Maybe optimize that we only run the x-basis for the qubits that are 1 in the z-basis?
                 result_string = ""
                 dag = circuit_to_dag(val)
