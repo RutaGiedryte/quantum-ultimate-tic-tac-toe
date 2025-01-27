@@ -288,16 +288,12 @@ class QuantumTicTacToe:
                 for b, cells in enumerate(self._active_cells):
                     if b not in boards:
                         continue
-
                     for c in cells:
                         index = b * 9 + c
                         qcs["exist"].measure(index, index)
                         qcs["symbol"].h(index)
                         qcs["symbol"].measure(index, index)
-
                     cells.clear()
-
-                print("SIM")
                 pm = generate_preset_pass_manager(backend=self._backend, optimization_level=3, coupling_map=cmap)
                 isa_circuit = pm.run(val)
                 sampler = SamplerV2(mode=self._backend)
@@ -332,7 +328,6 @@ class QuantumTicTacToe:
                     counts = run_circuit(qc=qc, backend=self._backend, shots=2 ** (qc.num_qubits + 3))
                     bitstring = get_fair_bitstring(counts, 0.05, 2 ** (qc.num_qubits + 3))
                     result_string += str(bitstring)
-                # print(result_string)
                 results[key] = result_string
 
         # update board
