@@ -321,7 +321,6 @@ class QuantumTicTacToe:
 
                 # There is only one shot...?
                 most_populated_string = max(counts, key=counts.get)
-                # print(most_populated_string)
                 results[key] = most_populated_string
             else:
                 # Maybe optimize that we only run the x-basis for the qubits that are 1 in the z-basis?
